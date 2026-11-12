@@ -782,7 +782,10 @@ function exitDemo() {
   applyLibrary(clone(DEFAULT_DEPARTMENTS));
   location.hash = "#/login"; if (S.user) ensureProfile(S.user).then(() => render()); else render();
 }
-const shareLink = () => `${location.origin}${location.pathname}#/demo`;
+// Public address used for sharing and in e-mails. Firebase Hosting is open to everyone
+// (Vercel preview addresses ask visitors to log in to Vercel).
+const PUBLIC_URL = "https://grade-system-new.web.app/";
+const shareLink = () => `${PUBLIC_URL}#/demo`;
 async function copyShareLink() {
   const url = shareLink();
   try { await navigator.clipboard.writeText(url); toast(t("tLinkCopied"), "ok"); }
@@ -2036,7 +2039,7 @@ async function notify(name, e, o = {}) {
     if (!recips.length && o.fallback !== false) recips = all.filter(u => u.role === "admin" && u.id !== S.user.uid);
     const data = { positionTitle:e.position?.jobTitle || "", positionId:e.position?.positionId || "", department:deptName(e.departmentId || e.position?.department),
       grade:o.grade || e.evaluation?.finalGrade || "", actorName:S.profile?.displayName || S.user.email || "", comment:o.comment || "",
-      link:`${location.origin}${location.pathname}#/positions/${e.id}`, appUrl:`${location.origin}${location.pathname}` };
+      link:`${PUBLIC_URL}#/positions/${e.id}`, appUrl:PUBLIC_URL };
     for (const u of recips) {
       await addDoc(collection(db, "mail"), { to:u.notifyEmail, toUid:u.id, template:{ name, data:{ ...data, recipientName:u.displayName || "" } },
         createdAt:serverTimestamp(), createdBy:S.user.uid, positionDocId:e.id || "" });
