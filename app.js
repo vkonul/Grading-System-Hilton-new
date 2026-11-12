@@ -520,6 +520,15 @@ const STR = {
   mailQueued:["{n} e-mail(s) queued","{n} e-poçt növbəyə qoyuldu"], mailNone:["No e-mails yet","Hələ e-poçt yoxdur"],
   mailTo:["To","Kimə"], mailTpl:["Template","Şablon"], mailState:["State","Vəziyyət"], mailDate:["Date","Tarix"],
   mailPending:["Queued — the e-mail extension is not active yet","Növbədə — e-poçt genişlənməsi hələ aktiv deyil"],
+  jdTemplate:["Job description template","Vəzifə təlimatı şablonu"], jdTemplates:["Job description templates","Vəzifə təlimatı şablonları"],
+  jdOpen:["Job description","Təlimat"], jdCustom:["Custom template","Xüsusi şablon"], jdDefault:["Default (from level)","Standart (səviyyəyə görə)"],
+  jdIntro:["This template pre-fills purpose, responsibilities, KPIs and requirements when this title is chosen for a new position. Edit it to match how the job is done in your hotel.","Bu şablon yeni vəzifə üçün bu ad seçiləndə məqsədi, öhdəlikləri, KPI-ları və tələbləri avtomatik doldurur. Onu otelinizdəki işə uyğun redaktə edin."],
+  jdSave:["Save template","Şablonu yadda saxla"], jdReset:["Reset to default","Standarta qaytar"], tJdSaved:["Template saved","Şablon yadda saxlanıldı"], tJdReset:["Template reset to default","Şablon standarta qaytarıldı"],
+  jdApply:["Apply job description template","Vəzifə təlimatı şablonunu tətbiq et"],
+  jdApplyConfirm:["Replace purpose, responsibilities, KPIs and requirements with the template?","Məqsəd, öhdəliklər, KPI-lar və tələblər şablonla əvəz olunsun?"], tJdApplied:["Template applied — review and save","Şablon tətbiq olundu — yoxlayıb yadda saxlayın"],
+  jdHas:["Template: custom","Şablon: xüsusi"], jdReqs:["Requirements","Tələblər"], jdReadOnly:["Read-only — you can edit templates of your own department","Yalnız oxumaq üçün — öz departamentinizin şablonlarını redaktə edə bilərsiniz"],
+  editAnyStatusInfo:["You can update the job description at any time. Scores and the grade are not changed.","Vəzifə təlimatını istənilən vaxt yeniləyə bilərsiniz. Ballar və dərəcə dəyişmir."],
+  changedAfterApproval:["Job description changed after approval — consider re-evaluation","Vəzifə təlimatı təsdiqdən sonra dəyişdirilib — yenidən qiymətləndirməni nəzərdən keçirin"],
   colSection:["Section","Bölmə"], colField:["Field","Sahə"], colValue:["Value","Dəyər"], general:["General","Ümumi"], no_:["No.","№"]
 };
 const I18N = { az:{}, en:{} };
@@ -724,7 +733,7 @@ async function startDemo(resume = false) {
   if (!resume || !demoLoad()) { DEMO.db = demoSeed(); DEMO.uid = "demo-admin"; }
   DEMO.on = true; demoSave();
   S.user = demoUser(DEMO.uid); S.profile = dclone(DEMO.db.users[S.user.uid]); S.employees = null; S.users = null;
-  await loadLibrary();
+  await loadLibrary(); await loadJobTemplates();
   S.authReady = true;
 }
 async function switchDemoRole(uid) {
@@ -897,6 +906,31 @@ async function signIn() {
 }
 async function doSignOut() { if (DEMO.on) { exitDemo(); return; } await signOut(auth); S.profile = null; S.employees = null; S.users = null; location.hash = "#/login"; }
 
+// Job description templates per (department, title) — Firestore `jobTemplates`, editable by HR / Admin and the department's manager
+const JD_REQ_FIELDS = ["minEducation", "experienceYears", "technicalSkills", "softwareSystems", "languages", "certifications"];
+const jdId = (dept, title) => `${dept}__${String(title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+async function loadJobTemplates() {
+  try { S.jdt = Object.fromEntries((await getDocs(collection(db, "jobTemplates"))).docs.map(d => [d.id, d.data()])); } catch (e) { console.warn("jobTemplates", e); S.jdt = {}; }
+}
+// Template for a title: the custom one if saved, otherwise built from the level template
+function jdFor(dept, title) {
+  const custom = S.jdt?.[jdId(dept, title)];
+  if (custom) return { ...clone(custom), custom:true };
+  const lvl = levelFor(title, dept), tpl = LEVEL_TEMPLATES[lvl];
+  return { dept, title, custom:false, primaryPurpose:tpl ? L(tpl).replace("{dept}", deptName(dept)) : "", mainObjectives:"",
+    responsibilities:tpl ? tpl.resp.map(([en, az, fq, lv]) => ({ ...blankResp(), task:S.lang === "en" ? en : az, frequency:fq, level:lv })) : [blankResp()], knowledge:{} };
+}
+function applyJd(d, jd, overwrite) {
+  let changed = false;
+  if (overwrite || !(d.purpose.primaryPurpose || "").trim()) { d.purpose.primaryPurpose = jd.primaryPurpose || ""; changed = true; }
+  if (jd.mainObjectives && (overwrite || !(d.purpose.mainObjectives || "").trim())) { d.purpose.mainObjectives = jd.mainObjectives; changed = true; }
+  const empty = !(d.responsibilities || []).some(r => (r.task || "").trim() || (r.description || "").trim());
+  if ((overwrite || empty) && jd.responsibilities?.length) { d.responsibilities = clone(jd.responsibilities).map(r => ({ ...blankResp(), ...r })); changed = true; }
+  d.knowledge = d.knowledge || {};
+  JD_REQ_FIELDS.forEach(k => { const v = jd.knowledge?.[k]; if (v !== undefined && v !== "" && v !== null && (overwrite || d.knowledge[k] === undefined || d.knowledge[k] === "" || d.knowledge[k] === null)) { d.knowledge[k] = v; changed = true; } });
+  return changed;
+}
+const canEditJd = dept => isHR() || (isMgr() && dept === myDept());
 async function loadLibrary() {
   try {
     const snap = await getDocs(collection(db, "departments"));
@@ -939,6 +973,7 @@ const ROUTES = [
   [/^#\/positions\/([^/]+)\/evaluate$/, scrEvaluate],
   [/^#\/positions\/([^/]+)$/, scrDetail],
   [/^#\/library$/, scrLibrary],
+  [/^#\/library\/jd\/([^/]+)\/(.+)$/, scrJd],
   [/^#\/reports$/, scrReports],
   [/^#\/admin\/users$/, scrAdmin, "admin"]
 ];
@@ -967,7 +1002,7 @@ async function render() {
   if (!hit) { location.replace(S.user ? "#/dashboard" : "#/login"); return; }
   if (hit[2] === "admin" && !isAdmin()) { toast(t("tAdminOnly"), "warn"); location.replace("#/dashboard"); return; }
   try {
-    const html = await hit[1]({ id:m[1] ? decodeURIComponent(m[1]) : null, params, path, seq });
+    const html = await hit[1]({ id:m[1] ? decodeURIComponent(m[1]) : null, id2:m[2] ? decodeURIComponent(m[2]) : null, params, path, seq });
     if (seq !== renderSeq || html == null) return;
     main.innerHTML = html;
     afterRender(hit[1]);
@@ -989,7 +1024,7 @@ function navItems() {
 function renderHeader() {
   const { path } = parseHash();
   const items = navItems();
-  const isActive = h => path === h || (h !== "#/dashboard" && path.startsWith(h));
+  const isActive = h => path === h || (h !== "#/dashboard" && path.startsWith(h + "/")) || (h !== "#/dashboard" && path.startsWith(h + "?"));
   const dark = effectiveTheme() === "dark";
   const p = S.profile, u = S.user;
   const initials = (p?.displayName || u?.email || "?").split(" ").map(s => s[0]).slice(0, 2).join("").toUpperCase();
@@ -1215,11 +1250,13 @@ function nextPositionId(dept, exceptId) {
   for (let i = 1; i < 1000; i++) { const id = `POS-${dept}-${String(i).padStart(3, "0")}`; if (!used.has(id)) return id; }
   return `POS-${dept}-999`;
 }
+// Job description (sections 1–11) is editable at any status; scores and grade follow the workflow
 function canEdit(e) {
   if (isHR()) return true;
-  if (isMgr()) return e.departmentId === myDept() && ["draft", "returned"].includes(e.status);
+  if (isMgr()) return e.departmentId === myDept();
   return false;
 }
+const workflowOpen = st => !st || ["draft", "returned"].includes(st);   // manager scoring + submit allowed
 
 async function scrForm({ id, params, seq }) {
   await loadEmployees();
@@ -1325,6 +1362,8 @@ function section1HTML(d) {
         <option value="__other" ${sel === "__other" ? "selected" : ""}>${t("otherTitle")}</option></select>
       ${S.form.other ? `<label for="f-otherTitle" class="small muted" style="margin-top:4px">${t("typeTitle")}</label><input type="text" id="f-otherTitle" data-othertitle="1" value="${esc(p.jobTitle)}">` : ""}
     </div>
+    ${p.jobTitle && dept ? `<div class="full row" style="justify-content:space-between"><span class="small muted">📄 ${jdFor(dept, p.jobTitle).custom ? t("jdHas") : t("jdDefault")}</span>
+      <button type="button" class="btn btn-ghost" data-act="jdapply">${t("jdApply")}</button></div>` : ""}
     <div class="full"><div class="banner info" style="margin:0" id="rangeInfo">${lvl ? `<b>${t("suggestedRange")}: ${rangeText(lvl)}</b><span class="small">${esc(levelName(lvl))}</span>` : `<span class="small muted">${t("levelAuto")}</span>`}</div></div>
     ${f.filter(x => !["department", "jobTitle"].includes(x[0])).map(x => fieldHTML("position." + x[0], x, p[x[0]], {
       hint: x[0] === "jobLevel" ? t("levelAuto") : x[0] === "positionId" ? "POS-{DEPT}-###" : "",
@@ -1358,6 +1397,7 @@ function formHTML() {
   <div class="page-head"><div><div class="label-caps">${id ? esc(d.position?.positionId || "") : ""}</div><h1>${id ? t("editPosition") : t("newPosition")}</h1>
     ${id ? `<p class="sub">${badge(S.form.origStatus)}</p>` : ""}</div></div>
   ${S.form.origStatus === "returned" && d.returnComment ? `<div class="banner warn" role="note"><b>${t("returnedBanner")}</b>${t("hrComment")}: ${esc(d.returnComment)}</div>` : ""}
+  ${id && !workflowOpen(S.form.origStatus) ? `<div class="banner info" role="note"><span class="small">${t("editAnyStatusInfo")}</span></div>` : ""}
   <section class="card" style="margin-bottom:16px"><div class="label-caps" style="margin-bottom:12px">${t("employee")}</div>
     <div class="fields" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">${TOP_FIELDS.map(f => fieldHTML(f[0], f, d[f[0]])).join("")}</div>
     <div style="margin-top:16px" id="progressBox">${progressHTML(d)}</div></section>
@@ -1369,14 +1409,14 @@ function formHTML() {
   <div class="actionbar">
     <button type="button" class="btn btn-ghost" data-act="formcancel">${t("cancel")}</button>
     <button type="button" class="btn btn-secondary" data-act="savedraft">${isNewOrMgr ? t("saveDraft") : t("save")}</button>
-    ${canMgrScore(d) ? `<button type="button" class="btn btn-primary" data-act="submitform">${t("submitEval")}</button>` : ""}
+    ${canMgrScore(d) && workflowOpen(S.form.origStatus) ? `<button type="button" class="btn btn-primary" data-act="submitform">${t("submitEval")}</button>` : ""}
   </div>`;
 }
 // Section 12A — the manager's own scoring (step 1)
 const SECMGR = { n:"12A", key:"managerEvaluation", en:"Manager evaluation", az:"Menecerin qiymətləndirməsi" };
 function mgrScoringHTML(d) {
   const me = d.managerEvaluation || (d.managerEvaluation = { scores:{}, justifications:{}, comments:"" });
-  if (!canMgrScore(d)) {
+  if (!canMgrScore(d) || !workflowOpen(S.form.origStatus)) {
     if (isSelf(d)) return `<p class="small" style="color:var(--danger)">${t("conflictSelf")}</p>`;
     if (!me.scores || !Object.keys(me.scores).length) return `<p class="small muted">${t("mgrOnlySubmit")}</p>`;
     return visibility({ ...d, status:S.form.origStatus }).mgr ? scoresTable(d, true, false) : `<p class="small muted">🔒 ${t("mgrHiddenUntil")}</p>`;
@@ -1407,14 +1447,7 @@ function applyTitle(title) {
   const lvl = levelFor(title, p.department);
   p.jobLevel = lvl;
   if (!p.positionId || /^POS-[A-Z]+-\d{3}$/.test(p.positionId) && !p.positionId.startsWith(`POS-${p.department}-`)) p.positionId = nextPositionId(p.department, S.form.id);
-  const tpl = LEVEL_TEMPLATES[lvl];
-  let prefilled = false;
-  if (tpl) {
-    const dn = deptName(p.department);
-    if (!(d.purpose.primaryPurpose || "").trim()) { d.purpose.primaryPurpose = L(tpl).replace("{dept}", dn); prefilled = true; }
-    const empty = !(d.responsibilities || []).some(r => (r.task || "").trim() || (r.description || "").trim());
-    if (empty) { d.responsibilities = tpl.resp.map(([en, az, fq, lv]) => ({ ...blankResp(), task:S.lang === "en" ? en : az, frequency:fq, level:lv })); prefilled = true; }
-  }
+  const prefilled = applyJd(d, jdFor(p.department, title), false);
   if (prefilled) { S.open.add(2); S.open.add(3); toast(t("prefilled")); }
 }
 function validate(d) {
@@ -1464,11 +1497,12 @@ async function saveForm(submit) {
   }
   let status;
   if (submit) status = "submitted";
-  else if (!f.id || isMgr()) status = "draft";
+  else if (!f.id || (isMgr() && workflowOpen(f.origStatus))) status = "draft";
   else status = f.origStatus;
   d.status = status;
   // Manager evaluation (step 1): only the department manager (or Admin as fallback) writes it
-  if (canMgrScore(d) && d.managerEvaluation) {
+  const mgrScoring = canMgrScore(d) && workflowOpen(f.origStatus && f.id ? f.origStatus : null);
+  if (mgrScoring && d.managerEvaluation) {
     const me = d.managerEvaluation, st = scoreTotal(me.scores);
     me.scores = Object.fromEntries(FACTORS.filter(f => me.scores?.[f.key]).map(f => [f.key, Number(me.scores[f.key])]));
     me.justifications = Object.fromEntries(Object.entries(me.justifications || {}).filter(([, v]) => (v || "").trim()));
@@ -1476,7 +1510,8 @@ async function saveForm(submit) {
       evaluatorUid:S.user.uid, evaluatorName:S.profile?.displayName || S.user.email || "", date:today() });
   }
   const payload = pickPersist(d);
-  if (!canMgrScore(d)) delete payload.managerEvaluation;
+  if (!mgrScoring) delete payload.managerEvaluation;
+  if (f.id && f.origStatus === "approved") payload.profileChangedAfterApproval = { at:new Date().toISOString(), byName:S.profile?.displayName || S.user.email || "" };
   payload.updatedBy = S.user.uid; payload.updatedAt = serverTimestamp();
   const hAction = submit ? "submitted" : !f.id ? "created" : "edited";
   const hNote = submit ? `${scoreTotal(d.managerEvaluation?.scores).total}/45` : "";
@@ -1551,6 +1586,7 @@ async function scrDetail({ id, seq }) {
     <div style="text-align:center"><div class="label-caps" style="margin-bottom:6px">${t("grade")}</div><span class="pill lg ${finalOf(e) || p.currentGrade ? "" : "empty"}">${esc(finalOf(e) || p.currentGrade || "—")}</span>
       <div class="small muted" style="margin-top:6px">${t("suggestedRange")}: ${rangeText(p.jobLevel)}</div></div></div>
     ${e.status === "returned" && e.returnComment ? `<div class="banner warn" style="margin:16px 0 0"><b>${t("hrComment")}</b>${esc(e.returnComment)}</div>` : ""}
+    ${e.profileChangedAfterApproval && e.status === "approved" && !isMgr() ? `<div class="banner warn" style="margin:16px 0 0"><b>✎ ${t("changedAfterApproval")}</b><span class="small">${esc(e.profileChangedAfterApproval.byName || "")} · ${esc(String(e.profileChangedAfterApproval.at || "").slice(0, 10))}</span></div>` : ""}
     ${e.status === "director_approval" && !canFinalApprove(e) ? `<div class="banner info" style="margin:16px 0 0"><b>⏳ ${t("waitingDirector")}</b>${isDirector() ? `<span class="small">${t(finalApproveBlock(e))}</span>` : ""}</div>` : ""}
   </section>
   ${e.status === "director_approval" && canFinalApprove(e) ? directorPanelHTML(e) : ""}
@@ -1980,7 +2016,7 @@ async function saveEval(mode) {
     evaluationDate:es.evaluationDate || today(), evaluatorName:S.profile?.displayName || S.user.email || "", evaluatorUid:S.user.uid
   };
   const action = mode === "send" ? "sent_to_director" : mode === "return" ? "returned_to_manager" : "hr_saved";
-  const upd = { status, evaluation, updatedAt:serverTimestamp(), updatedBy:S.user.uid,
+  const upd = { status, evaluation, updatedAt:serverTimestamp(), updatedBy:S.user.uid, profileChangedAfterApproval:null,
     history:arrayUnion(histEntry(action, mode === "return" ? comment : `${st.total}/45${es.finalGrade ? " · " + es.finalGrade : ""}${cal?.flagged ? " · ⚠" : ""}`)) };
   if (mode === "return") upd.returnComment = comment;
   $$(".actionbar .btn").forEach(b => b.disabled = true);
@@ -2024,9 +2060,58 @@ function renderLib() {
     return `<section class="card"><div class="label-caps">${esc(d.code)} · ${d.titles.length} ${t("titlesCount")}</div>
       <h2 style="margin:4px 0 2px">${esc(L(d))}</h2><div class="small muted" style="margin-bottom:8px">${esc(S.lang === "en" ? d.az : d.en)}</div>
       <p class="small">${esc(S.lang === "en" ? d.descEn : d.descAz)}</p>
-      <ul class="titles">${titles.map(x => { const l = levelFor(x, d.code); return `<li><span class="n">${esc(x)}</span><span class="chip navy" title="${esc(L(LEVELS[l]))}">${l}</span><span class="chip">${rangeText(l)}</span></li>`; }).join("")}</ul></section>`;
+      <ul class="titles">${titles.map(x => { const l = levelFor(x, d.code), has = !!S.jdt?.[jdId(d.code, x)]; return `<li><span class="n">${esc(x)}</span><span class="chip navy" title="${esc(L(LEVELS[l]))}">${l}</span><span class="chip">${rangeText(l)}</span>
+        <a class="btn btn-ghost jd-link ${has ? "has" : ""}" href="#/library/jd/${encodeURIComponent(d.code)}/${encodeURIComponent(x)}" title="${esc(t("jdTemplate"))}">📄 ${t("jdOpen")}${has ? " ✓" : ""}</a></li>`; }).join("")}</ul></section>`;
   }).join("");
   box.innerHTML = cards ? `<div class="grid">${cards}</div>` : `<div class="card"><div class="empty"><p>${t("noResults")}</p></div></div>`;
+}
+// Job description template editor (#/library/jd/:dept/:title)
+async function scrJd({ id:dept, id2:title }) {
+  if (!DEPT[dept]) { location.replace("#/library"); return null; }
+  if (!S.jdEdit || S.jdEdit.key !== jdId(dept, title)) {
+    await loadJobTemplates();
+    const jd = jdFor(dept, title);
+    S.jdEdit = { key:jdId(dept, title), dept, title, custom:jd.custom, data:{ primaryPurpose:jd.primaryPurpose || "", mainObjectives:jd.mainObjectives || "",
+      responsibilities:(jd.responsibilities?.length ? jd.responsibilities : [blankResp()]).map(r => ({ ...blankResp(), ...r })), knowledge:{ ...(jd.knowledge || {}) } } };
+  }
+  return jdHTML();
+}
+function jdHTML() {
+  const j = S.jdEdit, d = j.data, ro = !canEditJd(j.dept), lvl = levelFor(j.title, j.dept);
+  const P = SECTIONS[1].fields, R = SECTIONS[2].fields, K = SECTIONS[3].fields.filter(f => JD_REQ_FIELDS.includes(f[0]));
+  return `<div class="no-print" style="margin-bottom:12px"><a href="#/library" class="small">← ${t("libTitle")}</a></div>
+  <div class="page-head"><div><div class="label-caps">${t("jdTemplate")} · ${esc(j.dept)} · ${esc(deptName(j.dept))}</div><h1>${esc(j.title)}</h1>
+    <p class="sub"><span class="chip navy">${esc(levelName(lvl))}</span> <span class="chip">${rangeText(lvl)}</span> <span class="chip">${j.custom ? t("jdCustom") : t("jdDefault")}</span></p></div></div>
+  <div class="banner info"><span class="small">${ro ? t("jdReadOnly") : t("jdIntro")}</span></div>
+  <section class="card" style="margin-bottom:16px"><h2>${esc(L(SECTIONS[1]))}</h2><div class="fields">
+    ${P.filter(f => ["primaryPurpose", "mainObjectives"].includes(f[0])).map(f => fieldHTML("jd." + f[0], f, d[f[0]], { disabled:ro })).join("")}</div></section>
+  <section class="card" style="margin-bottom:16px"><h2>${esc(L(SECTIONS[2]))}</h2>
+    ${d.responsibilities.map((r, i) => `<div class="resp" id="jdresp-${i}"><div class="resp-h"><span class="label-caps">${t("responsibility")} ${i + 1}</span>
+      ${ro ? "" : `<button type="button" class="btn btn-danger" data-act="jddelresp" data-i="${i}" ${d.responsibilities.length <= 1 ? "disabled" : ""}>🗑 ${t("removeResp")}</button>`}</div>
+      <div class="fields">${R.map(f => fieldHTML(`jd.responsibilities.${i}.${f[0]}`, f, r[f[0]], { disabled:ro, full:f[0] === "task" })).join("")}</div></div>`).join("")}
+    ${ro ? "" : `<button type="button" class="btn btn-secondary" data-act="jdaddresp" style="margin-top:12px">${t("addResp")}</button>`}</section>
+  <section class="card"><h2>${t("jdReqs")}</h2><div class="fields">${K.map(f => fieldHTML("jd.knowledge." + f[0], f, d.knowledge[f[0]], { disabled:ro })).join("")}</div></section>
+  ${ro ? "" : `<div class="actionbar">
+    <a class="btn btn-ghost" href="#/library">${t("cancel")}</a>
+    ${j.custom ? `<button type="button" class="btn btn-warn" data-act="jdreset">${t("jdReset")}</button>` : ""}
+    <button type="button" class="btn btn-primary" data-act="jdsave">${t("jdSave")}</button></div>`}`;
+}
+function rerenderJd() { const y = window.scrollY; $("#main").innerHTML = jdHTML(); $$("textarea").forEach(autoGrow); window.scrollTo(0, y); }
+async function saveJd(reset) {
+  const j = S.jdEdit;
+  try {
+    if (reset) {
+      if (!(await confirmDlg(t("jdReset") + "?"))) return;
+      await deleteDoc(doc(db, "jobTemplates", j.key)); delete S.jdt[j.key]; S.jdEdit = null; toast(t("tJdReset"), "ok"); render(); return;
+    }
+    const d = j.data;
+    const resp = d.responsibilities.filter(r => (r.task || "").trim()).map(r => Object.fromEntries(Object.entries({ ...blankResp(), ...r }).map(([k, v]) => [k, typeof v === "string" ? v.trim() : v])));
+    const knowledge = Object.fromEntries(JD_REQ_FIELDS.filter(k => d.knowledge[k] !== undefined && d.knowledge[k] !== "" && d.knowledge[k] !== null).map(k => [k, d.knowledge[k]]));
+    const data = { dept:j.dept, title:j.title, primaryPurpose:(d.primaryPurpose || "").trim(), mainObjectives:(d.mainObjectives || "").trim(), responsibilities:resp, knowledge,
+      updatedBy:S.user.uid, updatedByName:S.profile?.displayName || "", updatedAt:serverTimestamp() };
+    await setDoc(doc(db, "jobTemplates", j.key), data);
+    S.jdt[j.key] = data; S.jdEdit = null; toast(t("tJdSaved"), "ok"); location.hash = "#/library";
+  } catch (e) { toast(errMsg(e), "err"); }
 }
 function startLibEdit() {
   S.libEdit = DEPARTMENTS.map(d => ({ code:d.code, en:d.en, az:d.az, descEn:d.descEn || "", descAz:d.descAz || "", isNew:false,
@@ -2373,6 +2458,12 @@ document.addEventListener("click", async ev => {
     if (open) body.querySelectorAll("textarea").forEach(autoGrow);
     return;
   }
+  if (el.dataset.chip && el.dataset.chip.startsWith("jd.") && S.jdEdit) {
+    const path = el.dataset.chip.slice(3), v = el.dataset.v, cur = getP(S.jdEdit.data, path);
+    setP(S.jdEdit.data, path, cur === v ? "" : v);
+    el.parentElement.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === getP(S.jdEdit.data, path)));
+    return;
+  }
   if (el.dataset.chip && S.form) {
     const path = el.dataset.chip, v = el.dataset.v;
     const cur = getP(S.form.data, path); setP(S.form.data, path, cur === v ? "" : v); S.dirty = true;
@@ -2447,6 +2538,16 @@ document.addEventListener("click", async ev => {
     case "dirapprove": directorDecide(el.dataset.id, "approved"); break;
     case "dirreturn": directorDecide(el.dataset.id, "returned"); break;
     case "mailtpl": installMailTemplates(); break;
+    case "jdsave": saveJd(false); break;
+    case "jdreset": saveJd(true); break;
+    case "jdaddresp": S.jdEdit.data.responsibilities.push(blankResp()); rerenderJd(); break;
+    case "jddelresp": S.jdEdit.data.responsibilities.splice(Number(el.dataset.i), 1); rerenderJd(); break;
+    case "jdapply": {
+      const d = S.form.data;
+      if (!(await confirmDlg(t("jdApply"), t("jdApplyConfirm")))) break;
+      applyJd(d, jdFor(d.position.department, d.position.jobTitle), true); S.dirty = true; S.open.add(2); S.open.add(3); S.open.add(4);
+      rerenderForm(); toast(t("tJdApplied"), "ok"); break;
+    }
     case "evreturn": saveEval("return"); break;
   }
 });
@@ -2478,6 +2579,10 @@ document.addEventListener("input", e => {
     }
     if (el.dataset.ev === "calibrationNote") el.closest(".field").classList.toggle("invalid", !el.value.trim());
     return;
+  }
+  if (S.jdEdit && el.dataset.path?.startsWith("jd.")) {
+    let v = el.value; if (el.dataset.num) v = v === "" ? null : Math.max(0, Number(v));
+    setP(S.jdEdit.data, el.dataset.path.slice(3), v); return;
   }
   if (!S.form) return;
   if (el.dataset.othertitle) { S.form.data.position.jobTitle = el.value; S.dirty = true; refreshFormBits(); return; }
@@ -2552,6 +2657,7 @@ window.addEventListener("hashchange", () => {
   if (S.form && !/^#\/positions\/(new|[^/]+\/edit)$/.test(path)) { S.form = null; S.dirty = false; }
   if (S.evalState && !/\/evaluate$/.test(path)) S.evalState = null;
   if (S.libEdit && path !== "#/library") S.libEdit = null;
+  if (S.jdEdit && !path.startsWith("#/library/jd/")) S.jdEdit = null;
   render();
   window.scrollTo(0, 0);
   $("#main").focus({ preventScroll:true });
@@ -2568,7 +2674,7 @@ onAuthStateChanged(auth, async u => {
   if (DEMO.on) return;  // demo session has its own user
   S.user = u; S.employees = null; S.users = null;
   if (u) {
-    try { await ensureProfile(u); if (role() !== "pending") await loadLibrary(); }
+    try { await ensureProfile(u); if (role() !== "pending") { await loadLibrary(); await loadJobTemplates(); } }
     catch (e) { console.error(e); S.profile = { role:"pending" }; toast(errMsg(e), "err"); }
   } else S.profile = null;
   S.authReady = true;

@@ -44,6 +44,14 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Job description templates per title: HR / Admin, or the manager of that department
+    match /jobTemplates/{id} {
+      allow read: if isActive();
+      allow create, update: if isStaffHR() || (isManager() && request.resource.data.dept == me().departmentId
+                                               && (resource == null || resource.data.dept == me().departmentId));
+      allow delete: if isStaffHR() || (isManager() && resource.data.dept == me().departmentId);
+    }
+
     // Job title library. Everyone signed in reads it; only Admin edits it.
     match /departments/{code} {
       allow read: if signedIn();
@@ -84,6 +92,13 @@ service cloud.firestore {
             && request.resource.data.status in ["draft", "submitted"]
             && !changed().hasAny(["evaluation", "finalApproval", "managerApproval"])
             && (!changed().hasAny(["managerEvaluation"]) || notSelf(resource.data)))
+        // Manager: update the job description (sections 1–11) at any later status — no scores, status, grade or employee changes
+        || (isManager()
+            && resource.data.departmentId == me().departmentId
+            && request.resource.data.departmentId == me().departmentId
+            && request.resource.data.status == resource.data.status
+            && !changed().hasAny(["evaluation", "finalApproval", "managerApproval", "managerEvaluation", "status", "employeeEmail", "employeeCode", "fullName", "returnComment"])
+            && request.resource.data.position.get("currentGrade", "") == resource.data.position.get("currentGrade", ""))
         // HR Director / HR Manager: final approval or return to HR (four-eyes + conflict of interest)
         || (isDirector()
             && resource.data.status in ["director_approval", "manager_approval"]
