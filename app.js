@@ -555,6 +555,7 @@ const STR = {
   tPgSaved:["Individual grade saved","Fərdi dərəcə yadda saxlanıldı"], tNeedReason:["A reason is required for an override","Dəyişiklik üçün səbəb mütləqdir"], h_personal_grade:["Individual grade set","Fərdi dərəcə təyin edildi"],
   noJobGrade:["The individual grade is calculated after the job grade is approved","Fərdi dərəcə vəzifə dərəcəsi təsdiqləndikdən sonra hesablanır"],
   preview:["Preview","Önizləmə"], previewBtn:["👁 Preview","👁 Önizlə"], download:["Download .xlsx","Excel-i yüklə"],
+  signedInAs:["Signed in as","Daxil olmusunuz:"], continueApp:["Continue to the app","Sistemə keç"], continueDemo:["Continue the demo","Demoya davam et"],
   colSection:["Section","Bölmə"], colField:["Field","Sahə"], colValue:["Value","Dəyər"], general:["General","Ümumi"], no_:["No.","№"]
 };
 const I18N = { az:{}, en:{} };
@@ -939,11 +940,13 @@ async function signIn() {
   S.loginError = "";
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt:"select_account" });
+  try { sessionStorage.setItem("gs.afterLogin", "1"); } catch {}
   try { await signInWithPopup(auth, provider); }
   catch (e) {
     if (["auth/popup-blocked", "auth/operation-not-supported-in-this-environment", "auth/web-storage-unsupported"].includes(e.code)) {
       try { await signInWithRedirect(auth, provider); return; } catch (e2) { e = e2; }
     }
+    try { sessionStorage.removeItem("gs.afterLogin"); } catch {}
     if (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") return;
     S.loginError = `${t("tSignInFailed")}: ${e.code || e.message}`;
     render();
@@ -1107,7 +1110,7 @@ const ROUTES = [
 ];
 let renderSeq = 0;
 function parseHash() {
-  const raw = location.hash || "#/dashboard";
+  const raw = location.hash || "#/login";
   const [path, qs] = raw.split("?");
   return { path, params:new URLSearchParams(qs || "") };
 }
@@ -1123,8 +1126,8 @@ async function render() {
     location.replace("#/dashboard"); return;
   }
   if (!S.user) { if (path !== "#/login") { location.replace("#/login"); return; } }
-  else if (role() === "pending") { if (path !== "#/pending") { location.replace("#/pending"); return; } }
-  else if (path === "#/login" || path === "#/pending" || path === "#/" || path === "#") { location.replace("#/dashboard"); return; }
+  else if (role() === "pending") { if (path !== "#/pending" && path !== "#/login") { location.replace("#/pending"); return; } }
+  else if (path === "#/pending" || path === "#/" || path === "#") { location.replace("#/dashboard"); return; }
   let hit = null, m = null;
   for (const r of ROUTES) { m = path.match(r[0]); if (m) { hit = r; break; } }
   if (!hit) { location.replace(S.user ? "#/dashboard" : "#/login"); return; }
@@ -1207,27 +1210,31 @@ function closeDrawer() { $("#drawer").hidden = true; $("#drawerBackdrop").hidden
    10) Screens
    ===================================================================== */
 // S1 — Login
-// First page is bilingual: current language first, the other one underneath
-const other = () => S.lang === "en" ? "az" : "en";
-const t2 = k => I18N[other()][k] ?? "";
-const bi = (k, cls = "") => `<span class="bi-main">${esc(t(k))}</span><span class="bi-alt ${cls}" lang="${other()}">${esc(t2(k))}</span>`;
+// First page (landing). Opens for everyone at the main address; a signed-in user gets "Continue".
 function scrLogin() {
-  return `<div class="login-wrap"><div class="card login-card bilingual">
+  const signedIn = !!S.user && !DEMO.on, inDemo = DEMO.on;
+  const go = role() === "pending" ? "#/pending" : "#/dashboard";
+  return `<div class="login-wrap"><div class="card login-card">
+    <div class="seg-lang lang-card" role="group" aria-label="${t("langLabel")}">
+      <button data-act="lang" data-v="az" aria-pressed="${S.lang === "az"}">Azərbaycanca</button>
+      <button data-act="lang" data-v="en" aria-pressed="${S.lang === "en"}">English</button></div>
     <div class="mono" aria-hidden="true">GS</div>
     <h1>${esc(t("appName"))}</h1>
-    <p class="bi-title" lang="${other()}">${esc(t2("appName"))}</p>
-    <p class="muted" style="margin:14px 0 2px">${esc(t("tagline"))}</p>
-    <p class="muted bi-sub" lang="${other()}" style="margin-bottom:24px">${esc(t2("tagline"))}</p>
-    <button class="btn btn-google" data-act="signin">
+    <p class="muted" style="margin-bottom:24px">${esc(t("tagline"))}</p>
+    ${signedIn ? `<p class="small muted" style="margin-bottom:10px">${esc(t("signedInAs"))} <b>${esc(S.profile?.displayName || S.user.email || "")}</b></p>
+      <a class="btn btn-primary btn-block" href="${go}">${t("continueApp")} →</a>
+      <button class="btn btn-ghost btn-block" data-act="signout" style="margin-top:8px">${t("signOut")}</button>`
+    : inDemo ? `<a class="btn btn-primary btn-block" href="#/dashboard">${t("continueDemo")} →</a>
+      <button class="btn btn-ghost btn-block" data-act="signout" style="margin-top:8px">${t("exitDemo")}</button>`
+    : `<button class="btn btn-google" data-act="signin">
       <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
-      <span class="bi-stack">${bi("signInGoogle")}</span></button>
+      ${t("signInGoogle")}</button>`}
     <div role="alert" aria-live="assertive">${S.loginError ? `<div class="err">${esc(S.loginError)}</div>` : ""}</div>
-    <div class="or-line"><span>${esc(t("or"))} · ${esc(t2("or"))}</span></div>
-    <a class="btn btn-secondary btn-block" href="#/demo"><span class="bi-stack">${bi("openDemo")}</span></a>
-    <p class="small muted" style="margin:8px 0 0">${esc(t("demoHint"))}</p>
-    <p class="small muted bi-sub" lang="${other()}">${esc(t2("demoHint"))}</p>
-    <a class="btn btn-ghost btn-block" href="media/grading-system-tour.mp4" target="_blank" rel="noopener" style="margin-top:8px"><span class="bi-stack">${bi("watchTour")}</span></a>
-    <button class="btn btn-ghost btn-block" data-act="sharelink" style="margin-top:8px"><span class="bi-stack"><span class="bi-main">🔗 ${esc(t("shareDemo"))}</span><span class="bi-alt" lang="${other()}">${esc(t2("shareDemo"))}</span></span></button>
+    ${inDemo ? "" : `<div class="or-line"><span>${t("or")}</span></div>
+    <a class="btn btn-secondary btn-block" href="#/demo">${t("openDemo")}</a>
+    <p class="small muted" style="margin-top:8px">${t("demoHint")}</p>`}
+    <a class="btn btn-ghost btn-block" href="media/grading-system-tour.mp4" target="_blank" rel="noopener" style="margin-top:8px">${t("watchTour")}</a>
+    <button class="btn btn-ghost btn-block" data-act="sharelink" style="margin-top:8px">🔗 ${t("shareDemo")}</button>
   </div></div>`;
 }
 // S2 — Pending
@@ -2867,6 +2874,8 @@ onAuthStateChanged(auth, async u => {
     catch (e) { console.error(e); S.profile = { role:"pending" }; toast(errMsg(e), "err"); }
   } else S.profile = null;
   S.authReady = true;
+  let after = false; try { after = !!sessionStorage.getItem("gs.afterLogin"); sessionStorage.removeItem("gs.afterLogin"); } catch {}
+  if (u && after && parseHash().path === "#/login") { location.replace(role() === "pending" ? "#/pending" : "#/dashboard"); return; }
   render();
 });
 

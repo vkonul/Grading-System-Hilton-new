@@ -337,14 +337,9 @@ table.cmp { font-size:13px; }
 :root[data-theme="dark"] .pv-table tr:first-child td { background:#14301F; color:#E7F4EC; }
 @media (max-width:767px) { .pv { padding:8px; } .pv-box { max-height:calc(100vh - 16px); } }
 
-/* Bilingual first page */
-.login-card.bilingual h1 { margin-bottom:0; }
-.bi-title { margin:2px 0 0; font-size:17px; font-weight:600; color:var(--text-muted); }
-.bi-sub { font-size:13px; opacity:.85; font-style:italic; margin-top:0; }
-.bi-stack { display:inline-flex; flex-direction:column; align-items:center; line-height:1.25; padding:6px 0; }
-.bi-main { font-weight:600; }
-.bi-alt { font-size:12px; font-weight:500; opacity:.75; }
-.login-card .btn { height:auto; min-height:52px; white-space:normal; text-align:center; }
+/* Language switch on the first page */
+.lang-card { display:flex; margin:0 auto 18px; width:max-content; }
+.lang-card button { min-width:120px; font-size:14px; }
 
 /* Library editor */
 .lt-head, .lt-row { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1.2fr) 44px; gap:8px; align-items:center; }
