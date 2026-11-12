@@ -2,7 +2,7 @@
 // Plain ES module, no build step. Firebase v10 modular SDK from the CDN, SheetJS as global XLSX.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection as fsCollection, doc as fsDoc, getDoc as fsGetDoc, getDocs as fsGetDocs, setDoc as fsSetDoc, addDoc as fsAddDoc, updateDoc as fsUpdateDoc, deleteDoc as fsDeleteDoc, query as fsQuery, where as fsWhere, serverTimestamp as fsServerTimestamp, writeBatch as fsWriteBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, collection as fsCollection, doc as fsDoc, getDoc as fsGetDoc, getDocs as fsGetDocs, setDoc as fsSetDoc, addDoc as fsAddDoc, updateDoc as fsUpdateDoc, deleteDoc as fsDeleteDoc, query as fsQuery, where as fsWhere, serverTimestamp as fsServerTimestamp, writeBatch as fsWriteBatch, arrayUnion as fsArrayUnion } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 /* =====================================================================
    1) Firebase config (project: grade-system-new)
@@ -41,6 +41,7 @@ const doc = (d, col, id) => DEMO.on ? { col, id } : fsDoc(d, col, id);
 const where = (f, op, v) => DEMO.on ? { f, v } : fsWhere(f, op, v);
 const query = (c, ...w) => DEMO.on ? { name:c.name, w } : fsQuery(c, ...w);
 const serverTimestamp = () => DEMO.on ? demoNow() : fsServerTimestamp();
+const arrayUnion = (...items) => DEMO.on ? { __union:items } : fsArrayUnion(...items);
 async function getDocs(q) {
   if (!DEMO.on) return fsGetDocs(q);
   let rows = Object.entries(DEMO.db[q.name] || {});
@@ -57,7 +58,8 @@ async function addDoc(c, data) { if (!DEMO.on) return fsAddDoc(c, data); const i
 async function updateDoc(r, data) {
   if (!DEMO.on) return fsUpdateDoc(r, data);
   const o = DEMO.db[r.col]?.[r.id]; if (!o) throw demoDenied();
-  for (const [k, v] of Object.entries(data)) { const ks = k.split("."); let a = o; ks.slice(0, -1).forEach(x => { a = (a[x] ??= {}); }); a[ks[ks.length - 1]] = dclone(v); }
+  for (const [k, v] of Object.entries(data)) { const ks = k.split("."); let a = o; ks.slice(0, -1).forEach(x => { a = (a[x] ??= {}); }); const last = ks[ks.length - 1];
+    a[last] = v && v.__union ? [...(Array.isArray(a[last]) ? a[last] : []), ...dclone(v.__union)] : dclone(v); }
   demoSave();
 }
 async function deleteDoc(r) { if (!DEMO.on) return fsDeleteDoc(r); delete DEMO.db[r.col]?.[r.id]; demoSave(); }
@@ -245,14 +247,15 @@ const OPTS = {
   supervision:{ close:["Close","Sıx"], general:["General","Ümumi"], minimal:["Minimal","Minimal"] },
   travel:{ none:["None","Yoxdur"], occasional:["Occasional","Arabir"], frequent:["Frequent","Tez-tez"] }
 };
-const STATUSES = { draft:["Draft","Qaralama"], submitted:["Submitted","Göndərilib"], under_evaluation:["Under evaluation","Qiymətləndirilir"], manager_approval:["Awaiting manager approval","Menecer təsdiqində"], returned:["Returned","Qaytarılıb"], approved:["Approved","Təsdiqlənib"] };
-const ROLES = { admin:["Admin","Administrator"], hr:["HR Evaluator","HR qiymətləndirici"], manager:["Department Manager","Departament meneceri"], pending:["Pending","Gözləmədə"] };
+const STATUSES = { draft:["Draft","Qaralama"], submitted:["Submitted","Göndərilib"], under_evaluation:["Under evaluation","Qiymətləndirilir"], director_approval:["Awaiting HR Director approval","HR direktorunun təsdiqində"], returned:["Returned","Qaytarılıb"], approved:["Approved","Təsdiqlənib"] };
+const ROLES = { admin:["Admin","Administrator"], hr_director:["HR Director / HR Manager","HR direktoru / HR meneceri"], hr:["HR Evaluator","HR qiymətləndirici"], manager:["Department Manager","Departament meneceri"], pending:["Pending","Gözləmədə"] };
 
 // [key, EN, AZ, type, required?]  types: text | textarea | number | date | grade | jobLevel | dept | jobTitle | opt:<list> | yesno
 const TOP_FIELDS = [
   ["employeeCode","Employee Code","İşçi kodu","text",1],
   ["fullName","Full Name","Ad, soyad","text",1],
-  ["hireDate","Hire Date","İşə qəbul tarixi","date"]
+  ["hireDate","Hire Date","İşə qəbul tarixi","date"],
+  ["employeeEmail","Employee e-mail (conflict-of-interest check)","İşçinin e-poçtu (maraqlar toqquşması yoxlaması)","text"]
 ];
 const SECTIONS = [
   { n:1, key:"position", en:"Position Information", az:"Vəzifə haqqında məlumat", fields:[
@@ -366,7 +369,7 @@ const EVAL_FIELDS = [
   ["evaluationDate","Evaluation Date","Qiymətləndirmə tarixi","date"],
   ["evaluatorName","Evaluator","Qiymətləndirici","text"]
 ];
-const PERSIST_KEYS = ["employeeCode","fullName","hireDate","departmentId","status","returnComment", ...SECTIONS.map(s => s.key), "evaluation"];
+const PERSIST_KEYS = ["employeeCode","fullName","hireDate","employeeEmail","departmentId","status","returnComment","managerEvaluation", ...SECTIONS.map(s => s.key), "evaluation"];
 
 /* =====================================================================
    5) i18n — { az:{...}, en:{...} }
@@ -428,7 +431,7 @@ const STR = {
   tNeedComment:["A comment is required","Şərh mütləqdir"], tNoAccessEval:["Only HR and Admin can evaluate positions","Vəzifələri yalnız HR və Admin qiymətləndirə bilər"],
   tCannotEdit:["This position can't be edited in its current status","Bu vəzifəni cari statusda redaktə etmək olmaz"], tNotFound:["Position not found","Vəzifə tapılmadı"],
   tSampleAdded:["Sample data loaded: {n} added, {s} skipped","Nümunə məlumatlar yükləndi: {n} əlavə edildi, {s} ötürüldü"], tExported:["Excel file downloaded","Excel faylı yükləndi"],
-  tXlsxMissing:["Excel library is still loading — try again","Excel kitabxanası hələ yüklənir — yenidən cəhd edin"], tSignInFailed:["Sign-in failed","Daxil olmaq alınmadı"],
+  tBadEmail:["Enter a valid e-mail address","Düzgün e-poçt ünvanı daxil edin"], tXlsxMissing:["Excel library is still loading — try again","Excel kitabxanası hələ yüklənir — yenidən cəhd edin"], tSignInFailed:["Sign-in failed","Daxil olmaq alınmadı"],
   tAdminOnly:["This page is for admins only","Bu səhifə yalnız adminlər üçündür"], tNoDept:["Your account has no department assigned yet","Hesabınıza hələ departament təyin edilməyib"],
   tCopy:["Copy created — review and save","Surət yaradıldı — yoxlayıb yadda saxlayın"],
   confirmTitle:["Are you sure?","Əminsiniz?"], ok:["Yes","Bəli"], confirmDelete:["This position will be deleted permanently.","Bu vəzifə həmişəlik silinəcək."],
@@ -465,6 +468,58 @@ const STR = {
   demoBar:["DEMO — sample data, changes are not saved to the real database","DEMO — nümunə məlumatlar, dəyişikliklər real bazaya yazılmır"],
   demoRole:["View as","Kim kimi baxmaq"], shareDemo:["Copy share link","Paylaşım linkini kopyala"], exitDemo:["Exit demo","Demodan çıx"],
   resetDemo:["Reset demo","Demonu sıfırla"], tLinkCopied:["Link copied — send it to your colleagues","Link kopyalandı — həmkarlarınıza göndərin"], or:["or","və ya"],
+  sendToDirector:["Send to HR Director for approval","HR direktorunun təsdiqinə göndər"],
+  tSentToDirector:["Sent to the HR Director for final approval","Yekun təsdiq üçün HR direktoruna göndərildi"],
+  confirmSendDir:["Send grade {g} to the HR Director for final approval?","{g} dərəcəsi yekun təsdiq üçün HR direktoruna göndərilsin?"],
+  finalApproval:["Final approval","Yekun təsdiq"], dirPanelTitle:["Your final approval is required","Yekun təsdiqiniz tələb olunur"],
+  dirPanelText:["HR proposed grade {g}. Review both evaluations, then approve or return to HR with a comment.","HR {g} dərəcəsini təklif edib. Hər iki qiymətləndirməyə baxın, sonra təsdiqləyin və ya şərhlə HR-a qaytarın."],
+  dirComment:["Comment","Şərh"], dirApprove:["Approve grade","Dərəcəni təsdiqlə"], dirReturn:["Return to HR","HR-a qaytar"], tReturnedHR:["Returned to HR","HR-a qaytarıldı"],
+  dirReturnedBanner:["Returned by the HR Director","HR direktoru tərəfindən qaytarılıb"], finalDecision:["Final decision","Yekun qərar"],
+  waitingDirector:["Waiting for final approval by the HR Director","HR direktorunun yekun təsdiqini gözləyir"],
+  pendingDirBanner:["{n} position(s) are waiting for your final approval","{n} vəzifə yekun təsdiqinizi gözləyir"], waitingMyApproval:["Waiting for my approval","Təsdiqimi gözləyənlər"],
+  pendingEvalBanner:["{n} position(s) are waiting for HR evaluation","{n} vəzifə HR qiymətləndirməsini gözləyir"],
+  pendingFixBanner:["{n} position(s) were returned to you for changes","{n} vəzifə düzəliş üçün sizə qaytarılıb"], returnedToMe:["Returned to me","Mənə qaytarılanlar"],
+  notDirector:["Only the HR Director / HR Manager can give the final approval","Yekun təsdiqi yalnız HR direktoru / HR meneceri verə bilər"],
+  conflictSelf:["Conflict of interest: you cannot score or approve your own position","Maraqlar toqquşması: öz vəzifənizi qiymətləndirə və ya təsdiqləyə bilməzsiniz"],
+  fourEyes:["Four-eyes rule: the person who scored the position cannot approve it","4 göz prinsipi: vəzifəni qiymətləndirən şəxs onu təsdiqləyə bilməz"],
+  mgrEvaluation:["Manager evaluation","Menecerin qiymətləndirməsi"], hrEvaluation:["HR evaluation","HR qiymətləndirməsi"],
+  mgrEvalSub:["Step 1 — the department manager scores the 9 factors before sending to HR","1-ci addım — departament meneceri HR-a göndərməzdən əvvəl 9 faktoru ballayır"],
+  hrEvalSub:["Step 2 — HR scores independently; Step 3 — HR Director approves","2-ci addım — HR müstəqil ballayır; 3-cü addım — HR direktoru təsdiqləyir"],
+  mgrScore:["Manager","Menecer"], hrScore:["HR","HR"], gap:["Gap (HR−M)","Fərq (HR−M)"], factor:["Factor","Faktor"],
+  profileHint:["Profile","Profil"], hintTitle:["Score suggested by the facts in the job profile","Vəzifə profilindəki faktlara əsasən tövsiyə olunan bal"],
+  pickScore:["Choose a score — each level has a definition","Bal seçin — hər səviyyənin tərifi var"], scaleGuide:["Scoring guide","Bal şkalası"],
+  justify:["Justification","Əsaslandırma"], justifyHint:["Your score ({v}) differs from the profile ({h}) by 2+ points — explain why","Balınız ({v}) profildən ({h}) 2+ bal fərqlənir — səbəbini izah edin"],
+  tNeedJust:["Add a justification where your score differs from the profile by 2+ points","Balı profildən 2+ fərqlənən faktorlar üçün əsaslandırma yazın"],
+  tNeedMgrScores:["Score all 9 factors in “Manager evaluation” before sending","Göndərməzdən əvvəl “Menecerin qiymətləndirməsi” bölməsində 9 faktorun hamısını ballayın"],
+  mgrOnlySubmit:["Only the department manager scores and sends the position to HR","Vəzifəni yalnız departament meneceri ballayıb HR-a göndərir"],
+  noMgrScores:["The manager has not scored this position","Menecer bu vəzifəni ballamayıb"],
+  blindInfo:["Hidden so your scoring stays independent. Score all 9 factors first.","Qiymətləndirməniz müstəqil qalsın deyə gizlədilib. Əvvəlcə 9 faktorun hamısını ballayın."],
+  revealMgr:["Compare with the manager's scores","Menecerin balları ilə müqayisə et"], tRevealFirst:["Compare with the manager's scores before sending","Göndərməzdən əvvəl menecerin balları ilə müqayisə edin"],
+  calibration:["Calibration","Kalibrasiya"], calFlag:["Calibration needed: max factor gap {m}, total gap {tg}","Kalibrasiya tələb olunur: faktor üzrə maks. fərq {m}, ümumi fərq {tg}"],
+  calOk:["Manager and HR scores are consistent","Menecer və HR balları uyğundur"], calNote:["Calibration note","Kalibrasiya qeydi"],
+  calHint:["Explain how the difference with the manager was resolved","Menecerlə fərqin necə həll olunduğunu izah edin"], tNeedCal:["A calibration note is required","Kalibrasiya qeydi mütləqdir"],
+  changedAfterReveal:["HR changed scores after seeing the manager's","HR menecerin ballarını gördükdən sonra dəyişdi"],
+  mgrHiddenUntil:["Manager scores are shown after you complete your own evaluation","Menecerin balları öz qiymətləndirmənizi tamamladıqdan sonra göstərilir"],
+  hrHiddenUntil:["HR scores are shown after final approval","HR balları yekun təsdiqdən sonra göstərilir"],
+  mgrJust:["Manager's justifications","Menecerin əsaslandırmaları"], hrJust:["HR justifications","HR əsaslandırmaları"],
+  nameHidden:["The employee's name is hidden — the job is evaluated, not the person","İşçinin adı gizlədilib — şəxs deyil, vəzifə qiymətləndirilir"],
+  consistency:["Similar positions","Oxşar vəzifələr"], noSimilar:["No graded positions with the same title yet","Eyni adlı qiymətləndirilmiş vəzifə hələ yoxdur"],
+  outlierWarn:["This grade differs by 2+ grades from the same title elsewhere","Bu dərəcə digər eyni adlı vəzifələrdən 2+ dərəcə fərqlənir"],
+  history:["History","Tarixçə"], h_created:["Created","Yaradıldı"], h_saved:["Saved","Yadda saxlanıldı"], h_submitted:["Manager scored and sent to HR","Menecer balladı və HR-a göndərdi"],
+  h_returned_to_manager:["Returned to manager","Menecerə qaytarıldı"], h_hr_saved:["HR saved scores","HR balları yadda saxladı"], h_sent_to_director:["Sent to HR Director","HR direktoruna göndərildi"],
+  h_approved:["Approved","Təsdiqləndi"], h_returned_to_hr:["Returned to HR","HR-a qaytarıldı"], h_edited:["Profile edited","Profil redaktə edildi"],
+  dec_approved:["Approved","Təsdiqləndi"], dec_returned:["Returned to HR","HR-a qaytarıldı"], dec_pending:["Pending","Gözləyir"],
+  confirmMgrApprove:["Approve grade {g} for this position?","Bu vəzifə üçün {g} dərəcəsi təsdiqlənsin?"],
+  evalStats:["Evaluator statistics","Qiymətləndirici statistikası"],
+  evalStatsDesc:["Spot evaluators who score consistently higher or lower than the profile or their counterpart.","Profilə və ya qarşı tərəfə nisbətən davamlı yüksək və ya aşağı bal verənləri görün."],
+  stEvaluator:["Evaluator","Qiymətləndirici"], stType:["Type","Növ"], stCount:["Positions","Vəzifə"], stAvg:["Avg total","Orta cəm"],
+  stDev:["Avg vs profile","Profilə nisbətən orta"], stGap:["Avg vs other side","Qarşı tərəfə nisbətən orta"], stFlag:["Calibration flags","Kalibrasiya xəbərdarlığı"],
+  notifyEmail:["Outlook e-mail (notifications)","Outlook e-poçtu (bildirişlər)"], mailTitle:["E-mail notifications (Outlook)","E-poçt bildirişləri (Outlook)"],
+  mailDesc:["Each workflow step queues an e-mail to the next person's Outlook address. The Firebase “Trigger Email” extension sends them through Microsoft 365.","Hər addımda növbəti şəxsin Outlook ünvanına e-poçt növbəyə qoyulur. Firebase “Trigger Email” genişlənməsi onları Microsoft 365 vasitəsilə göndərir."],
+  mailInstall:["Install / update e-mail templates","E-poçt şablonlarını quraşdır / yenilə"], tTemplates:["E-mail templates saved","E-poçt şablonları yadda saxlanıldı"],
+  mailQueued:["{n} e-mail(s) queued","{n} e-poçt növbəyə qoyuldu"], mailNone:["No e-mails yet","Hələ e-poçt yoxdur"],
+  mailTo:["To","Kimə"], mailTpl:["Template","Şablon"], mailState:["State","Vəziyyət"], mailDate:["Date","Tarix"],
+  mailPending:["Queued — the e-mail extension is not active yet","Növbədə — e-poçt genişlənməsi hələ aktiv deyil"],
   colSection:["Section","Bölmə"], colField:["Field","Sahə"], colValue:["Value","Dəyər"], general:["General","Ümumi"], no_:["No.","№"]
 };
 const I18N = { az:{}, en:{} };
@@ -629,7 +684,8 @@ const SAMPLE_DATA = [
 
 const DEMO_USERS = [
   ["demo-admin", "Demo Admin", "admin", null],
-  ["demo-hr", "Leyla Həsənova (HR)", "hr", null],
+  ["demo-hrd", "Leyla Həsənova (HR direktoru)", "hr_director", null],
+  ["demo-hr", "Aynur Rzayeva (HR)", "hr", null],
   ["demo-fo", "Front Office meneceri", "manager", "FO"],
   ["demo-hk", "Housekeeping meneceri", "manager", "HK"],
   ["demo-rev", "Revenue meneceri", "manager", "REV"],
@@ -639,16 +695,23 @@ const DEMO_USERS = [
 function demoSeed() {
   const now = Date.now(), db = { users:{}, employees:{} };
   DEMO_USERS.forEach(([uid, name, role, dep], i) => {
-    db.users[uid] = { uid, email:`${uid}@demo.local`, displayName:name, photoURL:"", role, departmentId:dep, lang:S.lang, theme:S.theme,
+    const email = uid === "demo-hrd" ? "leyla.hasanova@hotel-demo.az" : `${uid.replace("demo-", "")}@hotel-demo.az`;
+    db.users[uid] = { uid, email, notifyEmail:email, displayName:name, photoURL:"", role, departmentId:dep, lang:S.lang, theme:S.theme,
       createdAt:new DTS(now - 86400000 * 30), lastLogin:new DTS(now - 3600000 * (i + 1)) };
   });
-  SAMPLE_DATA.forEach((r, i) => {
-    const e = JSON.parse(JSON.stringify(r));
-    // Demo shows the new approval step: EMP-003 is waiting for the Revenue manager
+  db.directory = Object.fromEntries(Object.values(db.users).map(u => [u.uid, { uid:u.uid, displayName:u.displayName, email:u.email, notifyEmail:u.notifyEmail, role:u.role, departmentId:u.departmentId }]));
+  db.mail = {};
+  sampleRecords().forEach((e, i) => {
+    // Demo shows the full flow: EMP-003 was scored by both sides (with a calibration flag) and waits for the HR Director
     if (e.employeeCode === "EMP-003") {
-      e.status = "manager_approval"; e.evaluation.finalGrade = "G6"; e.evaluation.approvalStatus = "manager_approval";
-      e.managerApproval = { decision:"pending", comment:"", byUid:"", byName:"", date:"", sentAt:"2026-11-10", sentBy:"Leyla Həsənova" };
+      e.status = "director_approval"; e.evaluation.finalGrade = "G6"; e.evaluation.approvalStatus = "director_approval";
+      e.evaluation.evaluatorUid = "demo-hr"; e.evaluation.evaluatorName = "Aynur Rzayeva (HR)"; e.evaluation.blindScores = { ...e.evaluation.scores }; e.evaluation.changedAfterReveal = [];
+      e.managerEvaluation.evaluatorUid = "demo-rev"; e.managerEvaluation.evaluatorName = "Revenue meneceri";
+      e.history.push({ at:"2026-11-03T10:00:00.000Z", byName:"Revenue meneceri", role:"manager", action:"submitted", note:"35/45" },
+                     { at:"2026-11-10T15:30:00.000Z", byName:"Aynur Rzayeva (HR)", role:"hr", action:"sent_to_director", note:"32/45 · G6 · ⚠" });
     }
+    if (e.employeeCode === "EMP-002") { e.managerEvaluation.evaluatorUid = "demo-hk"; e.managerEvaluation.evaluatorName = "Housekeeping meneceri";
+      e.history.push({ at:"2026-11-08T11:00:00.000Z", byName:"Housekeeping meneceri", role:"manager", action:"submitted", note:"24/45" }); }
     db.employees["demo-" + e.employeeCode] = { ...e, createdBy:"demo-admin", updatedBy:"demo-admin", createdAt:new DTS(now - 86400000 * (10 - i)), updatedAt:new DTS(now - 3600000 * (10 - i)) };
   });
   return db;
@@ -681,6 +744,34 @@ async function copyShareLink() {
   const url = shareLink();
   try { await navigator.clipboard.writeText(url); toast(t("tLinkCopied"), "ok"); }
   catch { window.prompt(t("shareDemo"), url); }
+}
+
+const M = (a) => Object.fromEntries(["knowledge","experience","problemSolving","decisionMaking","accountability","businessImpact","leadership","communication","workingConditions"].map((k, i) => [k, a[i]]));
+const SAMPLE_EXTRA = {
+  "EMP-001":{ managerEvaluation:{ scores:M([2,2,2,1,2,3,1,3,3]), totalScore:19, recommendedGrade:"G3", justifications:{}, comments:"Guest-facing entry role.", evaluatorName:"Front Office Manager", date:"2026-10-01" },
+    finalApproval:{ decision:"approved", comment:"", byName:"Leyla Həsənova", date:"2026-10-15" } },
+  "EMP-002":{ managerEvaluation:{ scores:M([2,3,2,2,3,3,3,2,4]), totalScore:24, recommendedGrade:"G4", justifications:{}, comments:"Supervises 8 room attendants per shift.", evaluatorName:"Housekeeping Manager", date:"2026-11-08" } },
+  "EMP-003":{ managerEvaluation:{ scores:M([4,4,4,3,4,5,5,4,2]), totalScore:35, recommendedGrade:"G7",
+      justifications:{ leadership:"Leads the commercial pricing meetings and guides the reservations team functionally." }, comments:"Key commercial role.", evaluatorName:"Director of Revenue Management", date:"2026-11-03" } },
+  "EMP-004":{ managerEvaluation:{ scores:M([5,5,4,4,4,5,5,4,4]), totalScore:40, recommendedGrade:"G9",
+      justifications:{ knowledge:"Vocational diploma, but 10+ years of expert culinary knowledge across international cuisines." }, comments:"", evaluatorName:"Director of Food & Beverage", date:"2026-09-20" },
+    evaluationExtra:{ justifications:{ knowledge:"Formal education is vocational; expertise level justifies 4." } },
+    finalApproval:{ decision:"approved", comment:"", byName:"Leyla Həsənova", date:"2026-09-30" } },
+  "EMP-005":{ managerEvaluation:{ scores:M([5,5,5,5,5,4,5,5,2]), totalScore:41, recommendedGrade:"G9", justifications:{}, comments:"", evaluatorName:"General Manager", date:"2026-09-15" },
+    employeeEmail:"leyla.hasanova@hotel-demo.az", finalApproval:{ decision:"approved", comment:"", byName:"General Manager", date:"2026-09-20" } }
+};
+function sampleRecords() {
+  return SAMPLE_DATA.map(r => {
+    const e = JSON.parse(JSON.stringify(r)), x = SAMPLE_EXTRA[e.employeeCode] || {};
+    if (x.managerEvaluation) e.managerEvaluation = JSON.parse(JSON.stringify(x.managerEvaluation));
+    if (x.finalApproval) e.finalApproval = { ...x.finalApproval };
+    if (x.employeeEmail) e.employeeEmail = x.employeeEmail;
+    if (e.evaluation && x.evaluationExtra) Object.assign(e.evaluation, x.evaluationExtra);
+    if (e.evaluation && e.managerEvaluation) { const c = calibration(e.managerEvaluation.scores, e.evaluation.scores); if (c) Object.assign(e.evaluation, { calibrationFlagged:c.flagged, maxGap:c.maxGap, totalGap:c.totalGap }); }
+    if (e.employeeCode === "EMP-003") e.evaluation.calibrationNote = "Leadership: 1 direct report — 3 matches the profile. Business impact kept at 4 after discussion with the manager.";
+    e.history = [{ at:"2026-09-01T09:00:00.000Z", byUid:"", byName:"Sample data", role:"admin", action:"created", note:"" }];
+    return e;
+  });
 }
 
 /* =====================================================================
@@ -717,13 +808,13 @@ const statusLabel = s => STATUSES[s] ? L(STATUSES[s]) : (s || "");
 const optLabel = (list, v) => OPTS[list]?.[v] ? L(OPTS[list][v]) : (v ?? "");
 const role = () => S.profile?.role || "pending";
 const isAdmin = () => role() === "admin";
-const isHR = () => ["admin", "hr"].includes(role());
+const isHR = () => ["admin", "hr_director", "hr"].includes(role());
 const isMgr = () => role() === "manager";
 const myDept = () => S.profile?.departmentId || "";
 const badge = s => `<span class="badge st-${esc(s)}">${esc(statusLabel(s))}</span>`;
 const pill = g => g ? `<span class="pill">${esc(g)}</span>` : `<span class="pill empty">—</span>`;
 const finalOf = e => e.evaluation?.finalGrade || "";
-const icon = n => ({ total:"▤", submitted:"➤", under_evaluation:"✎", manager_approval:"⏳", approved:"✓", plus:"+", list:"☰", cards:"▦", export:"⤓" }[n] || "•");
+const icon = n => ({ total:"▤", submitted:"➤", under_evaluation:"✎", director_approval:"⏳", approved:"✓", plus:"+", list:"☰", cards:"▦", export:"⤓" }[n] || "•");
 
 function toast(msg, type = "") {
   const el = document.createElement("div");
@@ -814,20 +905,22 @@ async function loadLibrary() {
     else applyLibrary(clone(DEFAULT_DEPARTMENTS));
   } catch (e) { console.warn("library", e); }
 }
+// Records from the previous version used "manager_approval" for the final step
+function normalizeEmp(e) { if (e.status === "manager_approval") e.status = "director_approval"; return e; }
 async function loadEmployees(force = false) {
   if (S.employees && !force) return S.employees;
   let snap;
   if (isHR()) snap = await getDocs(collection(db, "employees"));
   else if (isMgr() && myDept()) snap = await getDocs(query(collection(db, "employees"), where("departmentId", "==", myDept())));
   else { S.employees = []; return S.employees; }
-  S.employees = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+  S.employees = snap.docs.map(d => normalizeEmp({ id:d.id, ...d.data() }));
   return S.employees;
 }
 async function loadOne(id) {
   const list = await loadEmployees();
   let e = list.find(x => x.id === id);
   if (!e) {
-    try { const s = await getDoc(doc(db, "employees", id)); if (s.exists()) e = { id:s.id, ...s.data() }; } catch (err) { console.warn(err); }
+    try { const s = await getDoc(doc(db, "employees", id)); if (s.exists()) e = normalizeEmp({ id:s.id, ...s.data() }); } catch (err) { console.warn(err); }
   }
   return e || null;
 }
@@ -982,8 +1075,8 @@ function scrPending() {
 async function scrDashboard() {
   const list = await loadEmployees(true);
   const count = s => list.filter(e => e.status === s).length;
-  const stats = [["total", t("totalPositions"), list.length], ["submitted", statusLabel("submitted"), count("submitted")], ["manager_approval", statusLabel("manager_approval"), count("manager_approval")],
-                 ["under_evaluation", statusLabel("under_evaluation"), count("under_evaluation")], ["approved", statusLabel("approved"), count("approved")]];
+  const stats = [["total", t("totalPositions"), list.length], ["submitted", statusLabel("submitted"), count("submitted")], ["under_evaluation", statusLabel("under_evaluation"), count("under_evaluation")],
+                 ["director_approval", statusLabel("director_approval"), count("director_approval")], ["approved", statusLabel("approved"), count("approved")]];
   const byGrade = GRADES.map(g => [g, list.filter(e => finalOf(e) === g).length]);
   const max = Math.max(1, ...byGrade.map(x => x[1]));
   const recent = sortByUpdated(list).slice(0, 5);
@@ -996,8 +1089,12 @@ async function scrDashboard() {
       ${isHR() ? `<a class="btn btn-secondary" href="#/positions?status=submitted">${t("waitingEval")} (${count("submitted")})</a>` : ""}
     </div></div>
   ${noDept ? `<div class="banner warn"><b>${t("tNoDept")}</b></div>` : ""}
-  ${isMgr() && count("manager_approval") ? `<div class="banner info row" style="justify-content:space-between"><b style="margin:0">${t("pendingMineBanner", { n:count("manager_approval") })}</b>
-    <a class="btn btn-primary" href="#/positions?status=manager_approval">${t("waitingMine")}</a></div>` : ""}
+  ${isDirector() && count("director_approval") ? `<div class="banner info row" style="justify-content:space-between"><b style="margin:0">${t("pendingDirBanner", { n:count("director_approval") })}</b>
+    <a class="btn btn-primary" href="#/positions?status=director_approval">${t("waitingMyApproval")}</a></div>` : ""}
+  ${role() === "hr" && count("submitted") ? `<div class="banner info row" style="justify-content:space-between"><b style="margin:0">${t("pendingEvalBanner", { n:count("submitted") })}</b>
+    <a class="btn btn-primary" href="#/positions?status=submitted">${t("waitingEval")}</a></div>` : ""}
+  ${isMgr() && count("returned") ? `<div class="banner warn row" style="justify-content:space-between"><b style="margin:0">${t("pendingFixBanner", { n:count("returned") })}</b>
+    <a class="btn btn-primary" href="#/positions?status=returned">${t("returnedToMe")}</a></div>` : ""}
   ${isMgr() ? `<p class="small muted" style="margin-bottom:12px">${t("myDeptOnly")}</p>` : ""}
   <div class="stats">${stats.map(([k, lbl, n]) => `
     <div class="card stat"><span class="ic" aria-hidden="true">${icon(k)}</span><div><div class="num">${n}</div><div class="lbl">${esc(lbl)}</div></div></div>`).join("")}</div>
@@ -1017,7 +1114,8 @@ async function scrDashboard() {
   <section class="card" style="margin-top:16px"><h2>${t("quickActions")}</h2><div class="row">
     <a class="btn btn-primary" href="#/positions/new">${t("newPosition")}</a>
     ${isHR() ? `<a class="btn btn-secondary" href="#/positions?status=submitted">${t("waitingEval")}</a>` : ""}
-    ${isMgr() ? `<a class="btn btn-secondary" href="#/positions?status=manager_approval">${t("waitingMine")} (${count("manager_approval")})</a>` : ""}
+    ${isDirector() ? `<a class="btn btn-secondary" href="#/positions?status=director_approval">${t("waitingMyApproval")} (${count("director_approval")})</a>` : ""}
+    ${isMgr() ? `<a class="btn btn-secondary" href="#/positions?status=returned">${t("returnedToMe")} (${count("returned")})</a>` : ""}
     <a class="btn btn-ghost" href="#/library">${t("navLibrary")}</a>
     <a class="btn btn-ghost" href="#/reports">${t("navReports")}</a>
     ${isAdmin() && !list.length ? `<button class="btn btn-ghost" data-act="sample">${t("loadSample")}</button>` : ""}
@@ -1242,22 +1340,6 @@ function respHTML(d) {
       <div class="fields">${fs.map(f => fieldHTML(`responsibilities.${i}.${f[0]}`, f, r[f[0]], { full: f[0] === "task" })).join("")}</div></div>`).join("")}
     <button type="button" class="btn btn-secondary" data-act="addresp" style="margin-top:12px">${t("addResp")}</button>`;
 }
-function sec12ReadOnly(ev, compact, status, ma) {
-  if (!ev || !ev.scores) return `<p class="muted">${t("noScores")}</p>`;
-  const st = scoreTotal(ev.scores);
-  return `<p class="small muted">${t("readOnlyHR")}</p><div class="kv">
-    ${FACTORS.map(f => `<div><div class="k">${esc(L(f))}</div><div class="v">${ev.scores[f.key] ?? "—"} / 5</div></div>`).join("")}
-    <div><div class="k">${esc(L(["Total Evaluation Score","Ümumi qiymətləndirmə balı"]))}</div><div class="v"><b>${ev.totalScore ?? st.total}</b> / 45</div></div>
-    <div><div class="k">${esc(L(["Recommended Job Grade","Tövsiyə olunan dərəcə"]))}</div><div class="v">${pill(ev.recommendedGrade)}</div></div>
-    <div><div class="k">${esc(L(["Final Approved Job Grade","Yekun təsdiqlənmiş dərəcə"]))}</div><div class="v">${pill(ev.finalGrade)}</div></div>
-    <div><div class="k">${esc(L(["Approval Status","Təsdiq statusu"]))}</div><div class="v">${(status || ev.approvalStatus) ? badge(status || ev.approvalStatus) : "—"}</div></div>
-    ${ma?.decision ? `<div><div class="k">${t("mgrDecision")}</div><div class="v">${esc(t("dec_" + ma.decision))}${ma.byName ? " · " + esc(ma.byName) : ""}${ma.date ? " · " + esc(ma.date) : ""}</div></div>
-      ${ma.comment ? `<div class="full"><div class="k">${t("mgrComment")}</div><div class="v">${esc(ma.comment)}</div></div>` : ""}` : ""}
-    <div><div class="k">${esc(L(["Evaluation Date","Qiymətləndirmə tarixi"]))}</div><div class="v">${esc(ev.evaluationDate || "—")}</div></div>
-    <div><div class="k">${esc(L(["Evaluator","Qiymətləndirici"]))}</div><div class="v">${esc(ev.evaluatorName || "—")}</div></div>
-    ${compact ? "" : `<div class="full"><div class="k">${esc(L(["Evaluator Comments","Qiymətləndiricinin şərhləri"]))}</div><div class="v">${esc(ev.comments || "—")}</div></div>`}
-  </div>`;
-}
 function formHTML() {
   const { data:d, id } = S.form;
   const showPeople = Number(d.position?.directReports) > 0;
@@ -1281,13 +1363,29 @@ function formHTML() {
     <div style="margin-top:16px" id="progressBox">${progressHTML(d)}</div></section>
   <form id="jobForm" novalidate onsubmit="return false">
     ${SECTIONS.map(s => accHTML(s, body(s), d)).join("")}
-    ${accHTML(SEC12, sec12ReadOnly(d.evaluation, false, S.form.origStatus, d.managerApproval), d)}
+    ${accHTML(SECMGR, mgrScoringHTML(d), d)}
+    ${accHTML(SEC12, d.evaluation?.scores || d.managerEvaluation?.scores ? evaluationSectionHTML({ ...d, id:S.form.id, status:S.form.origStatus, history:[] }) : `<p class="muted">${t("noScores")}</p>`, d)}
   </form>
   <div class="actionbar">
     <button type="button" class="btn btn-ghost" data-act="formcancel">${t("cancel")}</button>
     <button type="button" class="btn btn-secondary" data-act="savedraft">${isNewOrMgr ? t("saveDraft") : t("save")}</button>
-    <button type="button" class="btn btn-primary" data-act="submitform">${t("submitEval")}</button>
+    ${canMgrScore(d) ? `<button type="button" class="btn btn-primary" data-act="submitform">${t("submitEval")}</button>` : ""}
   </div>`;
+}
+// Section 12A — the manager's own scoring (step 1)
+const SECMGR = { n:"12A", key:"managerEvaluation", en:"Manager evaluation", az:"Menecerin qiymətləndirməsi" };
+function mgrScoringHTML(d) {
+  const me = d.managerEvaluation || (d.managerEvaluation = { scores:{}, justifications:{}, comments:"" });
+  if (!canMgrScore(d)) {
+    if (isSelf(d)) return `<p class="small" style="color:var(--danger)">${t("conflictSelf")}</p>`;
+    if (!me.scores || !Object.keys(me.scores).length) return `<p class="small muted">${t("mgrOnlySubmit")}</p>`;
+    return visibility({ ...d, status:S.form.origStatus }).mgr ? scoresTable(d, true, false) : `<p class="small muted">🔒 ${t("mgrHiddenUntil")}</p>`;
+  }
+  const st = scoreTotal(me.scores), rec = st.complete ? recommendGrade(st.total) : null;
+  return `<p class="small muted">${t("mgrEvalSub")}</p>
+    <div class="row" style="margin:8px 0 12px"><span class="chip navy">${t("totalScore")}: ${st.total} / 45</span><span class="chip">${st.count} / 9 ${t("scored")}</span>${rec ? `<span class="pill">${rec}</span>` : ""}</div>
+    <div class="stack">${factorCardsHTML({ target:"mgr", scores:me.scores, just:me.justifications || (me.justifications = {}), hints:profileHints(d) })}</div>
+    <div class="field" style="margin-top:12px"><label for="f-mgrComments">${t("mgrComment")}</label><textarea id="f-mgrComments" data-mgrcomment="1">${esc(me.comments || "")}</textarea></div>`;
 }
 function refreshFormBits() {
   if (!S.form) return;
@@ -1333,6 +1431,10 @@ function validate(d) {
     const k = !(r.task || "").trim() ? "task" : !r.frequency ? "frequency" : "level";
     miss.push([rs.length ? fid(`responsibilities.${i}.${k}`) : "sec-3", 3, "resp"]);
   }
+  const me = d.managerEvaluation || {};
+  const missF = FACTORS.find(f => !me.scores?.[f.key]);
+  if (missF) miss.push([`fc-mgr-${missF.key}`, "12A", "mgr"]);
+  else { const mj = missingJustifications(me.scores, me.justifications, profileHints(d)); if (mj.length) miss.push([`just-mgr-${mj[0]}`, "12A", "just"]); }
   return miss;
 }
 async function saveForm(submit) {
@@ -1340,16 +1442,17 @@ async function saveForm(submit) {
   d.departmentId = d.position.department || d.departmentId || "";
   if (isMgr()) d.departmentId = d.position.department = myDept();
   $$(".invalid").forEach(el => el.classList.remove("invalid"));
+  if (submit && !canMgrScore(d)) { toast(isSelf(d) ? t("conflictSelf") : t("mgrOnlySubmit"), "err"); return; }
   if (submit) {
     const miss = validate(d);
     if (miss.length) {
-      miss.forEach(([, n]) => n && S.open.add(n));
+      miss.forEach(([, n]) => n != null && S.open.add(n));
       rerenderForm();
       miss.forEach(([elId]) => { const el = document.getElementById(elId); (el?.closest(".field") || el)?.classList.add("invalid"); });
       const first = document.getElementById(miss[0][0]);
       first?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block:"center" });
       setTimeout(() => (first?.querySelector?.("button, input, select, textarea") || first)?.focus?.({ preventScroll:true }), 250);
-      toast(miss[0][2] === "resp" && miss.length === 1 ? t("tNeedResp") : t("tMissing"), "err");
+      toast(miss[0][2] === "resp" && miss.length === 1 ? t("tNeedResp") : miss[0][2] === "mgr" ? t("tNeedMgrScores") : miss[0][2] === "just" ? t("tNeedJust") : t("tMissing"), "err");
       return;
     }
   }
@@ -1364,21 +1467,38 @@ async function saveForm(submit) {
   else if (!f.id || isMgr()) status = "draft";
   else status = f.origStatus;
   d.status = status;
+  // Manager evaluation (step 1): only the department manager (or Admin as fallback) writes it
+  if (canMgrScore(d) && d.managerEvaluation) {
+    const me = d.managerEvaluation, st = scoreTotal(me.scores);
+    me.scores = Object.fromEntries(FACTORS.filter(f => me.scores?.[f.key]).map(f => [f.key, Number(me.scores[f.key])]));
+    me.justifications = Object.fromEntries(Object.entries(me.justifications || {}).filter(([, v]) => (v || "").trim()));
+    Object.assign(me, { totalScore:st.total, recommendedGrade:st.complete ? recommendGrade(st.total) : null,
+      evaluatorUid:S.user.uid, evaluatorName:S.profile?.displayName || S.user.email || "", date:today() });
+  }
   const payload = pickPersist(d);
+  if (!canMgrScore(d)) delete payload.managerEvaluation;
   payload.updatedBy = S.user.uid; payload.updatedAt = serverTimestamp();
+  const hAction = submit ? "submitted" : !f.id ? "created" : "edited";
+  const hNote = submit ? `${scoreTotal(d.managerEvaluation?.scores).total}/45` : "";
   const btns = $$(".actionbar .btn"); btns.forEach(b => b.disabled = true);
   try {
     let newId = f.id;
     if (!f.id) {
       if (isMgr()) payload.evaluation = null;
       payload.createdBy = S.user.uid; payload.createdAt = serverTimestamp();
+      payload.history = [histEntry("created"), ...(submit ? [histEntry("submitted", hNote)] : [])];
       newId = (await addDoc(collection(db, "employees"), payload)).id;
     } else {
       if (isMgr()) delete payload.evaluation;
+      payload.history = arrayUnion(histEntry(hAction, hNote));
       await updateDoc(doc(db, "employees", f.id), payload);
     }
+    const eRef = { ...d, id:newId };
+    let n = 0;
+    if (submit) n = await notify("evaluation_request", eRef, { roles:["hr"] });
+    else if (!f.id && !isMgr()) n = await notify("profile_request", eRef, { roles:["manager"], dept:d.departmentId, fallback:false });
     S.employees = null; S.dirty = false; S.form = null;
-    toast(submit ? t("tSubmitted") : t("tSaved"), "ok");
+    toast((submit ? t("tSubmitted") : t("tSaved")) + mailNote(n), "ok");
     location.hash = `#/positions/${newId}`;
   } catch (e) { toast(errMsg(e), "err"); btns.forEach(b => b.disabled = false); }
 }
@@ -1431,12 +1551,12 @@ async function scrDetail({ id, seq }) {
     <div style="text-align:center"><div class="label-caps" style="margin-bottom:6px">${t("grade")}</div><span class="pill lg ${finalOf(e) || p.currentGrade ? "" : "empty"}">${esc(finalOf(e) || p.currentGrade || "—")}</span>
       <div class="small muted" style="margin-top:6px">${t("suggestedRange")}: ${rangeText(p.jobLevel)}</div></div></div>
     ${e.status === "returned" && e.returnComment ? `<div class="banner warn" style="margin:16px 0 0"><b>${t("hrComment")}</b>${esc(e.returnComment)}</div>` : ""}
-    ${e.status === "manager_approval" && !canMgrDecide(e) ? `<div class="banner info" style="margin:16px 0 0"><b>⏳ ${esc(t("waitingMgr", { d:deptName(e.departmentId) }))}</b></div>` : ""}
+    ${e.status === "director_approval" && !canFinalApprove(e) ? `<div class="banner info" style="margin:16px 0 0"><b>⏳ ${t("waitingDirector")}</b>${isDirector() ? `<span class="small">${t(finalApproveBlock(e))}</span>` : ""}</div>` : ""}
   </section>
-  ${e.status === "manager_approval" && canMgrDecide(e) ? mgrPanelHTML(e) : ""}
+  ${e.status === "director_approval" && canFinalApprove(e) ? directorPanelHTML(e) : ""}
   <div class="row no-print" style="margin-bottom:16px" id="detailActions">
     ${edit ? `<a class="btn btn-primary" href="#/positions/${esc(e.id)}/edit">${t("edit")}</a>` : ""}
-    ${isHR() ? `<a class="btn btn-secondary" href="#/positions/${esc(e.id)}/evaluate">${t("evaluate")}</a>` : ""}
+    ${canHREvaluate() && !isSelf(e) && e.status !== "draft" ? `<a class="btn btn-secondary" href="#/positions/${esc(e.id)}/evaluate">${t("evaluate")}</a>` : ""}
     <button class="btn btn-ghost" data-act="exportC" data-id="${esc(e.id)}">${icon("export")} ${t("exportPos")}</button>
     <a class="btn btn-ghost" href="#/positions/new?dup=${esc(e.id)}">${t("duplicate")}</a>
     <button class="btn btn-ghost" data-act="print">${t("print")}</button>
@@ -1445,72 +1565,344 @@ async function scrDetail({ id, seq }) {
   <div class="stack">
     ${card("·", t("employee"), "", kvHTML(TOP_FIELDS, e))}
     ${secs}
-    ${card(12, L(SEC12), S.lang === "en" ? SEC12.az : SEC12.en, sec12ReadOnly(e.evaluation, false, e.status, e.managerApproval))}
+    ${card(12, L(SEC12), t("hrEvalSub"), evaluationSectionHTML(e))}
+    ${card("⏱", t("history"), "", historyHTML(e))}
   </div>`;
 }
 
-// Manager approval step (status manager_approval → approved | back to HR)
-function canMgrDecide(e) { return isAdmin() || (isMgr() && e.departmentId === myDept()); }
-function mgrPanelHTML(e) {
-  const ev = e.evaluation || {}, st = scoreTotal(ev.scores);
-  return `<section class="card no-print" id="mgrPanel" style="margin-bottom:16px;border-color:var(--accent)">
-    <div class="label-caps">${t("managerApproval")}</div><h2 style="margin:4px 0 6px">${t("mgrPanelTitle")}</h2>
-    <p>${esc(t("mgrPanelText", { g:ev.finalGrade || "—" }))}</p>
-    <div class="row" style="gap:16px;margin:12px 0">
-      <div><div class="k small muted">${t("totalScore")}</div><b style="font-size:20px">${ev.totalScore ?? st.total} / 45</b></div>
-      <div><div class="k small muted">${t("recommended")}</div>${pill(ev.recommendedGrade)}</div>
-      <div><div class="k small muted">${t("finalApproved")}</div><span class="pill lg">${esc(ev.finalGrade || "—")}</span></div>
-      <div><div class="k small muted">${t("evaluator")}</div>${esc(ev.evaluatorName || "—")}</div></div>
-    ${ev.comments ? `<p class="small"><b>${t("comments")}:</b> ${esc(ev.comments)}</p>` : ""}
-    <div class="field" style="margin-top:12px"><label for="mgrComment">${t("mgrComment")}</label><textarea id="mgrComment"></textarea>
-      <span class="hint">${t("tNeedComment")} — ${t("mgrReturn")}</span></div>
-    <div class="row" style="margin-top:12px">
-      <button class="btn btn-primary" data-act="mgrapprove" data-id="${esc(e.id)}">✓ ${t("mgrApprove")}</button>
-      <button class="btn btn-warn" data-act="mgrreturn" data-id="${esc(e.id)}">${t("mgrReturn")}</button></div></section>`;
+/* =====================================================================
+   Grading workflow v2
+   Manager scores → HR scores independently (blind) → calibration →
+   HR Director / HR Manager final approval (four-eyes) + history + e-mail
+   ===================================================================== */
+const FACTOR_ANCHORS = {
+  knowledge:[["Basic schooling; the job is learned in a few days","Orta təhsil; iş bir neçə günə öyrənilir"],
+    ["Vocational training or certificate; standard procedures","Peşə təhsili və ya sertifikat; standart prosedurlar"],
+    ["Bachelor's or equivalent; solid specialist knowledge in one area","Bakalavr və ya ekvivalenti; bir sahədə möhkəm ixtisas bilikləri"],
+    ["Advanced degree or deep expertise across several areas","Magistr və ya bir neçə sahədə dərin ekspertiza"],
+    ["Recognised expert; sets professional standards for the hotel","Tanınmış ekspert; otel üçün peşə standartlarını müəyyən edir"]],
+  experience:[["Less than 1 year","1 ildən az"],["1–2 years in a similar role","Oxşar vəzifədə 1–2 il"],
+    ["3–5 years, including some responsibility","3–5 il, müəyyən məsuliyyətlə"],["6–9 years, including leading others","6–9 il, başqalarına rəhbərlik daxil"],
+    ["10+ years, including senior leadership","10+ il, yüksək rəhbər təcrübəsi daxil"]],
+  problemSolving:[["Routine tasks with clear instructions","Aydın təlimatlı rutin işlər"],
+    ["Simple problems solved with known procedures","Sadə problemlər məlum prosedurlarla həll olunur"],
+    ["Varied problems needing analysis and judgement","Təhlil və mülahizə tələb edən müxtəlif problemlər"],
+    ["Complex, non-standard problems across functions","Funksiyalararası mürəkkəb, qeyri-standart problemlər"],
+    ["Strategic, new problems with no precedent","Presedenti olmayan strateji, yeni problemlər"]],
+  decisionMaking:[["Follows instructions; almost every decision is approved","Göstərişlərə əməl edir; demək olar bütün qərarlar təsdiqlənir"],
+    ["Decides routine matters within clear rules","Aydın qaydalar çərçivəsində rutin məsələləri həll edir"],
+    ["Decides the day-to-day operations of own area","Öz sahəsinin gündəlik əməliyyatları üzrə qərar verir"],
+    ["Decides for a department, including budget and staff","Departament üzrə, büdcə və kadr daxil olmaqla qərar verir"],
+    ["Sets direction for the hotel or a division","Otel və ya bölmə üçün istiqaməti müəyyən edir"]],
+  accountability:[["Own tasks only; errors are easy to fix","Yalnız öz tapşırıqları; səhvlər asan düzəlir"],
+    ["Own results; errors affect a few guests or colleagues","Öz nəticələri; səhvlər bir neçə qonaq və ya həmkara təsir edir"],
+    ["Results of a team or process; errors cost money or reputation","Komanda və ya proses nəticələri; səhvlər pul və ya nüfuz itkisinə səbəb olur"],
+    ["Results of a department; significant financial risk","Departamentin nəticələri; ciddi maliyyə riski"],
+    ["Results of the hotel or a division; major business risk","Otelin və ya bölmənin nəticələri; böyük biznes riski"]],
+  businessImpact:[["Little direct effect on guests or revenue","Qonaqlara və gəlirə birbaşa təsiri azdır"],
+    ["Affects individual guest experiences","Ayrı-ayrı qonaqların təcrübəsinə təsir edir"],
+    ["Affects a unit's service quality or costs","Bölmənin xidmət keyfiyyətinə və ya xərclərinə təsir edir"],
+    ["Affects department revenue, costs or guest scores","Departamentin gəlirinə, xərclərinə və ya qonaq reytinqinə təsir edir"],
+    ["Affects hotel-wide results and strategy","Bütün otelin nəticələrinə və strategiyasına təsir edir"]],
+  leadership:[["No responsibility for people","İnsanlara görə məsuliyyət yoxdur"],
+    ["Guides or trains colleagues informally","Həmkarlara qeyri-rəsmi yol göstərir və ya öyrədir"],
+    ["Supervises a small team (1–10 people)","Kiçik komandaya (1–10 nəfər) nəzarət edir"],
+    ["Manages a team of 11–40 or several supervisors","11–40 nəfərlik komandanı və ya supervayzerləri idarə edir"],
+    ["Leads managers or more than 40 people","Menecerlərə və ya 40+ nəfərə rəhbərlik edir"]],
+  communication:[["Exchanges routine information","Rutin məlumat mübadiləsi"],
+    ["Serves guests and coordinates with colleagues","Qonaqlara xidmət və həmkarlarla koordinasiya"],
+    ["Explains and persuades; handles complaints","İzah edir və inandırır; şikayətlərlə işləyir"],
+    ["Negotiates with partners, suppliers or key clients","Tərəfdaşlar, təchizatçılar və ya əsas müştərilərlə danışıqlar aparır"],
+    ["Represents the hotel; influences senior stakeholders","Oteli təmsil edir; yüksək səviyyəli tərəflərə təsir edir"]],
+  workingConditions:[["Office, regular hours, low strain","Ofis, normal iş saatları, az yük"],
+    ["Some standing or walking; occasional extra hours","Bəzən ayaq üstə və ya hərəkətdə; arabir əlavə saatlar"],
+    ["Shift work or regular physical / emotional strain","Növbəli iş və ya müntəzəm fiziki / emosional yük"],
+    ["Heavy physical work, heat or high-pressure guest contact","Ağır fiziki iş, isti mühit və ya gərgin qonaq təması"],
+    ["Hazardous conditions or constant high pressure","Təhlükəli şərait və ya daimi yüksək gərginlik"]]
+};
+const LMH = { low:1, medium:3, high:5 };
+const avgOf = arr => { const v = arr.filter(x => typeof x === "number" && !isNaN(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+const to5 = x => x == null ? null : Math.min(5, Math.max(1, Math.round(x)));
+// (3) Score suggested by the facts in the profile — a neutral reference point for both evaluators
+function profileHints(e) {
+  const k = e.knowledge || {}, d = e.decisions || {}, sc = e.scope || {}, ps = e.problemSolving || {}, c = e.communication || {}, env = e.environment || {}, p = e.position || {};
+  const m = v => LMH[v] ?? null;
+  const yrs = k.experienceYears === "" || k.experienceYears == null ? null : Number(k.experienceYears);
+  const heads = (Number(p.directReports) || 0) + (Number(p.indirectReports) || 0);
+  const anyPeople = Object.values(e.people || {}).some(Boolean);
+  const wc = avgOf([m(env.physicalRequirements), m(env.mentalDemands), m(env.healthSafetyRisks), m(env.challengingConditions)]);
+  return {
+    knowledge:{ secondary:1, vocational:2, bachelor:3, master:4, doctorate:5 }[k.minEducation] ?? null,
+    experience:yrs == null || isNaN(yrs) ? null : yrs < 1 ? 1 : yrs < 3 ? 2 : yrs < 6 ? 3 : yrs < 10 ? 4 : 5,
+    problemSolving:to5(avgOf([ps.complexity, ps.analyticalThinking, ps.independentResolution, ps.strategicPlanning, ps.innovation].map(m))),
+    decisionMaking:to5(avgOf([m(d.authorityLevel), m(d.operationalChanges), { close:1, general:3, minimal:5 }[d.supervisionReceived] ?? null])),
+    accountability:to5(avgOf([m(ps.errorImpact), avgOf((e.responsibilities || []).map(r => m(r.accountability))), m(sc.assetsResponsibility)])),
+    businessImpact:to5(avgOf([sc.operationalImpact, sc.financialImpact, sc.guestSatisfactionImpact, sc.businessPerformanceImpact].map(m))),
+    leadership:heads === 0 ? (anyPeople ? 2 : 1) : heads <= 10 ? 3 : heads <= 40 ? 4 : 5,
+    communication:to5(avgOf([{ inform:1, coordinate:2, negotiate:4, influence:5 }[c.communicationLevel] ?? null, m(c.confidentiality)])),
+    workingConditions:wc == null ? null : to5(wc + ((env.shiftWork || env.weekendsHolidays) ? 0.5 : 0))
+  };
 }
-async function mgrDecide(id, decision) {
-  const e = await loadOne(id); if (!e || !canMgrDecide(e)) { toast(t("tPermission"), "err"); return; }
-  const comment = ($("#mgrComment")?.value || "").trim();
-  if (decision === "returned" && !comment) { toast(t("tNeedComment"), "err"); $("#mgrComment")?.closest(".field")?.classList.add("invalid"); $("#mgrComment")?.focus(); return; }
+// A score 2+ points away from the profile hint must be justified
+const needsJustification = (score, hint) => !!(score && hint && Math.abs(score - hint) >= 2);
+function missingJustifications(scores, just, hints) {
+  return FACTORS.filter(f => needsJustification(Number(scores?.[f.key]), hints[f.key]) && !(just?.[f.key] || "").trim()).map(f => f.key);
+}
+// (1) Calibration between the two independent evaluations
+function calibration(mgr, hr) {
+  if (!mgr || !hr || !scoreTotal(mgr).complete || !scoreTotal(hr).complete) return null;
+  const gaps = Object.fromEntries(FACTORS.map(f => [f.key, Number(hr[f.key]) - Number(mgr[f.key])]));
+  const maxGap = Math.max(...Object.values(gaps).map(Math.abs));
+  const totalGap = scoreTotal(hr).total - scoreTotal(mgr).total;
+  return { gaps, maxGap, totalGap, flagged:maxGap >= 2 || Math.abs(totalGap) >= 4 };
+}
+// (5) Conflict of interest: nobody scores or approves their own position
+const normTxt = s => String(s || "").trim().toLowerCase();
+function isSelf(e) {
+  const em = normTxt(e?.employeeEmail);
+  const mine = [normTxt(S.user?.email), normTxt(S.profile?.notifyEmail)].filter(Boolean);
+  if (em && mine.includes(em)) return true;
+  return !!normTxt(e?.fullName) && normTxt(e.fullName) === normTxt(S.profile?.displayName);
+}
+const isDirector = () => ["hr_director", "admin"].includes(role());
+const canHREvaluate = () => ["hr", "hr_director", "admin"].includes(role());
+const canMgrScore = e => !isSelf(e) && (isAdmin() || (isMgr() && e.departmentId === myDept()));
+function finalApproveBlock(e) {
+  if (!isDirector()) return "notDirector";
+  if (isSelf(e)) return "conflictSelf";
+  if (e.evaluation?.evaluatorUid && e.evaluation.evaluatorUid === S.user.uid) return "fourEyes";
+  return "";
+}
+const canFinalApprove = e => !finalApproveBlock(e);
+// (6) Consistency: what did similar positions get?
+function similarPositions(e) {
+  const others = (S.employees || []).filter(x => x.id !== e.id);
+  const gradeOf = x => x.evaluation?.finalGrade || x.position?.currentGrade || "";
+  const sameTitle = others.filter(x => x.position?.jobTitle && x.position.jobTitle === e.position?.jobTitle && gradeOf(x)).map(x => ({ x, g:gradeOf(x) }));
+  const sameLevel = others.filter(x => x.position?.jobLevel && x.position.jobLevel === e.position?.jobLevel && gradeOf(x)).map(x => gradeOf(x));
+  const levelCounts = {}; sameLevel.forEach(g => levelCounts[g] = (levelCounts[g] || 0) + 1);
+  let outlier = false;
+  const proposed = e.evaluation?.finalGrade || (S.evalState?.id === e.id ? S.evalState.finalGrade : "");
+  if (proposed && sameTitle.length) {
+    const idx = sameTitle.map(s => gradeIdx(s.g)).sort((a, b) => a - b), med = idx[Math.floor(idx.length / 2)];
+    outlier = Math.abs(gradeIdx(proposed) - med) >= 2;
+  }
+  return { sameTitle, levelCounts, outlier, proposed };
+}
+function consistencyHTML(e) {
+  const s = similarPositions(e);
+  const lv = Object.entries(s.levelCounts).sort((a, b) => gradeIdx(a[0]) - gradeIdx(b[0]));
+  return `<div><div class="label-caps">${t("consistency")}</div>
+    ${s.sameTitle.length ? `<ul class="small" style="padding-left:18px;margin:6px 0">${s.sameTitle.slice(0, 6).map(({ x, g }) => `<li>${esc(x.position.jobTitle)} · ${esc(deptName(x.departmentId))} — <b>${esc(g)}</b></li>`).join("")}</ul>` : `<p class="small muted" style="margin:6px 0">${t("noSimilar")}</p>`}
+    ${lv.length ? `<p class="small muted" style="margin:0">${esc(e.position?.jobLevel || "")}: ${lv.map(([g, n]) => `${g}×${n}`).join(", ")}</p>` : ""}
+    ${s.outlier ? `<p class="small" style="color:var(--warn);margin-top:6px">⚠ ${t("outlierWarn")}</p>` : ""}</div>`;
+}
+// (8) Audit history
+const histEntry = (action, note = "") => ({ at:new Date().toISOString(), byUid:S.user?.uid || "", byName:S.profile?.displayName || S.user?.email || "", role:role(), action, note:String(note || "").slice(0, 300) });
+function historyHTML(e) {
+  const h = (e.history || []).slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  if (!h.length) return `<p class="muted small">—</p>`;
+  return `<ol class="timeline">${h.map(x => `<li><div class="small"><b>${esc(t("h_" + x.action) || x.action)}</b> · ${esc(x.byName || "")}${x.role ? ` <span class="muted">(${esc(L(ROLES[x.role] || ["", ""]))})</span>` : ""}</div>
+    <div class="small muted">${esc(String(x.at || "").replace("T", " ").slice(0, 16))}${x.note ? " — " + esc(x.note) : ""}</div></li>`).join("")}</ol>`;
+}
+
+/* ---------- Factor score cards (shared by manager & HR) ---------- */
+function factorCardsHTML(o) {
+  // o: { target:"mgr"|"hr", scores, just, hints, compare?, compareLabel?, disabled? }
+  return FACTORS.map(f => {
+    const v = Number(o.scores?.[f.key]) || 0, h = o.hints?.[f.key], cmp = o.compare ? Number(o.compare[f.key]) || 0 : 0;
+    const needJ = needsJustification(v, h), gap = cmp && v ? Math.abs(v - cmp) : 0;
+    const anchors = FACTOR_ANCHORS[f.key];
+    return `<section class="card factor ${needJ && !(o.just?.[f.key] || "").trim() ? "needs" : ""}" id="fc-${o.target}-${f.key}" aria-labelledby="fac-${o.target}-${f.key}">
+      <div class="row" style="justify-content:space-between"><h3 id="fac-${o.target}-${f.key}" style="margin:0">${esc(L(f))}</h3>
+        <span class="row">${h ? `<span class="chip" title="${esc(t("hintTitle"))}">${t("profileHint")}: ${h}</span>` : ""}
+          ${cmp ? `<span class="chip ${gap >= 2 ? "chip-warn" : "navy"}">${esc(o.compareLabel)}: ${cmp}</span>` : ""}
+          <span class="chip navy">${v ? v + " / 5" : "—"}</span></span></div>
+      <div class="small muted">${esc(S.lang === "en" ? f.dEn : f.dAz)}</div>
+      <div class="scale" role="group" aria-labelledby="fac-${o.target}-${f.key}">${SCALE.map((s, i) => `<button type="button" data-score="${f.key}" data-target="${o.target}" data-v="${i + 1}"
+        aria-pressed="${v === i + 1}" title="${esc(L(anchors[i]))}" ${o.disabled ? "disabled" : ""}><b>${i + 1}</b><span>${esc(L(s))}</span></button>`).join("")}</div>
+      <p class="anchor small">${v ? `<b>${v} — ${esc(L(SCALE[v - 1]))}:</b> ${esc(L(anchors[v - 1]))}` : `<span class="muted">${t("pickScore")}</span>`}</p>
+      <details class="small"><summary>${t("scaleGuide")}</summary><ol class="anchors">${anchors.map((a, i) => `<li class="${v === i + 1 ? "on" : ""}">${esc(L(a))}</li>`).join("")}</ol></details>
+      ${needJ ? `<div class="field" style="margin-top:10px"><label for="just-${o.target}-${f.key}">${t("justify")} <span class="req">*</span></label>
+        <textarea id="just-${o.target}-${f.key}" data-just="${f.key}" data-target="${o.target}" ${o.disabled ? "disabled" : ""}>${esc(o.just?.[f.key] || "")}</textarea>
+        <span class="hint">${esc(t("justifyHint", { h, v }))}</span></div>` : ""}
+    </section>`;
+  }).join("");
+}
+
+/* ---------- Read-only evaluation views ---------- */
+function scoresTable(e, showMgr, showHR) {
+  const me = e.managerEvaluation, ev = e.evaluation, hints = profileHints(e), cal = calibration(me?.scores, ev?.scores);
+  const cols = [[t("profileHint"), f => hints[f.key] ?? "—"]];
+  if (showMgr) cols.push([t("mgrScore"), f => me?.scores?.[f.key] ?? "—"]);
+  if (showHR) cols.push([t("hrScore"), f => ev?.scores?.[f.key] ?? "—"]);
+  if (showMgr && showHR && cal) cols.push([t("gap"), f => { const g = cal.gaps[f.key]; return `<span class="${Math.abs(g) >= 2 ? "gapwarn" : ""}">${g > 0 ? "+" : ""}${g}</span>`; }]);
+  const tot = (sc) => sc ? scoreTotal(sc).total : "—";
+  return `<div class="table-wrap-always"><table class="tbl cmp"><thead><tr><th>${t("factor")}</th>${cols.map(c => `<th>${c[0]}</th>`).join("")}</tr></thead><tbody>
+    ${FACTORS.map(f => `<tr><td>${esc(L(f))}</td>${cols.map(c => `<td>${c[1](f)}</td>`).join("")}</tr>`).join("")}
+    <tr class="tot"><td><b>${t("totalScore")}</b></td><td>—</td>${showMgr ? `<td><b>${tot(me?.scores)}</b></td>` : ""}${showHR ? `<td><b>${tot(ev?.scores)}</b></td>` : ""}${showMgr && showHR && cal ? `<td><b>${cal.totalGap > 0 ? "+" : ""}${cal.totalGap}</b></td>` : ""}</tr>
+    </tbody></table></div>`;
+}
+function justList(just) {
+  const items = FACTORS.filter(f => (just?.[f.key] || "").trim());
+  return items.length ? `<ul class="small" style="padding-left:18px">${items.map(f => `<li><b>${esc(L(f))}:</b> ${esc(just[f.key])}</li>`).join("")}</ul>` : "";
+}
+// Who may see which scores (blindness): manager sees HR scores only after approval; HR sees manager scores after scoring
+function visibility(e) {
+  const hrDone = scoreTotal(e.evaluation?.scores).complete;
+  if (isMgr()) return { mgr:true, hr:e.status === "approved" };
+  if (role() === "hr") return { mgr:hrDone || e.status === "approved", hr:true };
+  return { mgr:true, hr:true };   // HR Director, Admin
+}
+function evaluationSectionHTML(e) {
+  const me = e.managerEvaluation, ev = e.evaluation, vis = visibility(e), cal = calibration(me?.scores, ev?.scores), fa = e.finalApproval || (e.managerApproval?.decision && e.managerApproval.decision !== "pending" ? e.managerApproval : null);
+  const parts = [];
+  if (!me?.scores && !ev?.scores) return `<p class="muted">${t("noScores")}</p>`;
+  parts.push(scoresTable(e, vis.mgr && !!me?.scores, vis.hr && !!ev?.scores));
+  if (!vis.mgr && me?.scores) parts.push(`<p class="small muted">🔒 ${t("mgrHiddenUntil")}</p>`);
+  if (!vis.hr && ev?.scores) parts.push(`<p class="small muted">🔒 ${t("hrHiddenUntil")}</p>`);
+  const kv = [];
+  if (vis.mgr && me?.scores) kv.push([t("mgrEvaluation"), `${esc(me.evaluatorName || "—")} · ${esc(me.date || "")} · ${pill(me.recommendedGrade)}`], ...(me.comments ? [[t("mgrComment"), esc(me.comments)]] : []));
+  if (vis.hr && ev?.scores) {
+    kv.push([t("hrEvaluation"), `${esc(ev.evaluatorName || "—")} · ${esc(ev.evaluationDate || "")}`], [t("recommended"), pill(ev.recommendedGrade)], [t("finalApproved"), pill(ev.finalGrade)]);
+    if (ev.comments) kv.push([t("comments"), esc(ev.comments)]);
+    if (cal && vis.mgr) kv.push([t("calibration"), cal.flagged ? `<span style="color:var(--warn)">⚠ ${esc(t("calFlag", { m:cal.maxGap, tg:cal.totalGap }))}</span>` : `✓ ${t("calOk")}`]);
+    if (ev.calibrationNote) kv.push([t("calNote"), esc(ev.calibrationNote)]);
+    if (ev.changedAfterReveal?.length) kv.push([t("changedAfterReveal"), `<span style="color:var(--warn)">${esc(ev.changedAfterReveal.map(k => L(FACTORS.find(f => f.key === k) || { en:k, az:k })).join(", "))}</span>`]);
+  }
+  kv.push([t("status"), badge(e.status)]);
+  if (fa?.decision) kv.push([t("finalDecision"), `${esc(t("dec_" + fa.decision))}${fa.byName ? " · " + esc(fa.byName) : ""}${fa.date ? " · " + esc(fa.date) : ""}${fa.comment ? `<br><span class="small">${esc(fa.comment)}</span>` : ""}`]);
+  parts.push(`<div class="kv" style="margin-top:14px">${kv.map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")}</div>`);
+  const js = [vis.mgr && me?.justifications && justList(me.justifications) ? `<p class="small" style="margin:12px 0 0"><b>${t("mgrJust")}</b></p>${justList(me.justifications)}` : "",
+              vis.hr && ev?.justifications && justList(ev.justifications) ? `<p class="small" style="margin:12px 0 0"><b>${t("hrJust")}</b></p>${justList(ev.justifications)}` : ""].join("");
+  return parts.join("") + js;
+}
+
+/* ---------- Final approval panel (HR Director / HR Manager) ---------- */
+function directorPanelHTML(e) {
+  const ev = e.evaluation || {}, cal = calibration(e.managerEvaluation?.scores, ev.scores);
+  return `<section class="card no-print" id="dirPanel" style="margin-bottom:16px;border-color:var(--accent)">
+    <div class="label-caps">${t("finalApproval")}</div><h2 style="margin:4px 0 6px">${t("dirPanelTitle")}</h2>
+    <p>${esc(t("dirPanelText", { g:ev.finalGrade || "—" }))}</p>
+    <p class="small muted">👁 ${t("nameHidden")}</p>
+    ${scoresTable(e, !!e.managerEvaluation?.scores, true)}
+    ${cal?.flagged ? `<div class="banner warn" style="margin-top:12px"><b>⚠ ${esc(t("calFlag", { m:cal.maxGap, tg:cal.totalGap }))}</b>${esc(ev.calibrationNote || "")}</div>` : ""}
+    ${ev.changedAfterReveal?.length ? `<div class="banner warn"><b>${t("changedAfterReveal")}</b>${esc(ev.changedAfterReveal.map(k => L(FACTORS.find(f => f.key === k))).join(", "))}</div>` : ""}
+    ${ev.comments ? `<p class="small"><b>${t("comments")}:</b> ${esc(ev.comments)}</p>` : ""}
+    <div style="margin:12px 0">${consistencyHTML(e)}</div>
+    <div class="field"><label for="dirComment">${t("dirComment")}</label><textarea id="dirComment"></textarea>
+      <span class="hint">${t("tNeedComment")} — ${t("dirReturn")}</span></div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn btn-primary" data-act="dirapprove" data-id="${esc(e.id)}">✓ ${t("dirApprove")}</button>
+      <button class="btn btn-warn" data-act="dirreturn" data-id="${esc(e.id)}">${t("dirReturn")}</button></div></section>`;
+}
+async function directorDecide(id, decision) {
+  const e = await loadOne(id); if (!e) return;
+  const block = finalApproveBlock(e); if (block) { toast(t(block), "err"); return; }
+  const comment = ($("#dirComment")?.value || "").trim();
+  if (decision === "returned" && !comment) { toast(t("tNeedComment"), "err"); $("#dirComment")?.closest(".field")?.classList.add("invalid"); $("#dirComment")?.focus(); return; }
   const g = e.evaluation?.finalGrade;
-  if (decision === "approved" && !(await confirmDlg(t("confirmMgrApprove", { g }), "", t("mgrApprove")))) return;
-  if (decision === "returned" && !(await confirmDlg(t("confirmTitle"), "", t("mgrReturn")))) return;
+  if (decision === "approved" && !(await confirmDlg(t("confirmMgrApprove", { g }), "", t("dirApprove")))) return;
+  if (decision === "returned" && !(await confirmDlg(t("confirmTitle"), "", t("dirReturn")))) return;
   const upd = { status:decision === "approved" ? "approved" : "under_evaluation",
-    managerApproval:{ decision, comment, byUid:S.user.uid, byName:S.profile?.displayName || S.user.email || "", date:today() },
+    finalApproval:{ decision, comment, byUid:S.user.uid, byName:S.profile?.displayName || S.user.email || "", date:today() },
+    history:arrayUnion(histEntry(decision === "approved" ? "approved" : "returned_to_hr", decision === "approved" ? g : comment)),
     updatedAt:serverTimestamp(), updatedBy:S.user.uid };
   if (decision === "approved") { upd["position.currentGrade"] = g; upd["position.lastEvaluationDate"] = today(); }
   try {
     await updateDoc(doc(db, "employees", id), upd);
-    S.employees = null; toast(decision === "approved" ? t("tApproved") : t("tMgrReturned"), "ok"); render();
+    const n = decision === "approved"
+      ? await notify("approved", e, { roles:["manager"], dept:e.departmentId, uids:[e.evaluation?.evaluatorUid].filter(Boolean), grade:g })
+      : await notify("approval_returned", e, { uids:[e.evaluation?.evaluatorUid].filter(Boolean), roles:e.evaluation?.evaluatorUid ? [] : ["hr"], comment });
+    S.employees = null; toast((decision === "approved" ? t("tApproved") : t("tReturnedHR")) + mailNote(n), "ok"); render();
   } catch (err) { toast(errMsg(err), "err"); }
 }
 
-// S7 — Evaluation
+/* ---------- E-mail notifications (Outlook) via Firestore `mail` queue ---------- */
+// The "Trigger Email from Firestore" extension (SMTP: smtp.office365.com) sends each queued document.
+const MAIL_TEMPLATES = {
+  evaluation_request:{ subject:"Qiymətləndirmə gözləyir: {{positionTitle}} ({{positionId}})",
+    lead:"{{actorName}} vəzifə profilini və menecer qiymətləndirməsini HR-a göndərdi. Zəhmət olmasa, müstəqil qiymətləndirmənizi aparın.",
+    leadEn:"A position profile and the manager's scores were sent to HR. Please complete your independent evaluation." },
+  evaluation_returned:{ subject:"Düzəliş tələb olunur: {{positionTitle}} ({{positionId}})",
+    lead:"HR vəzifə profilini düzəliş üçün qaytardı. Şərh: {{comment}}", leadEn:"HR returned the position profile for changes. Comment: {{comment}}" },
+  approval_request:{ subject:"Yekun təsdiq gözləyir: {{positionTitle}} — {{grade}}",
+    lead:"HR {{grade}} dərəcəsini təklif etdi. Yekun təsdiqiniz gözlənilir.", leadEn:"HR proposed grade {{grade}}. Your final approval is required." },
+  approved:{ subject:"Təsdiqləndi: {{positionTitle}} — {{grade}}",
+    lead:"Vəzifənin dərəcəsi {{grade}} olaraq təsdiqləndi ({{actorName}}).", leadEn:"The position's grade was approved as {{grade}}." },
+  approval_returned:{ subject:"Yenidən baxış: {{positionTitle}} ({{positionId}})",
+    lead:"HR direktoru təklifi yenidən baxış üçün qaytardı. Şərh: {{comment}}", leadEn:"The HR Director returned the proposal for review. Comment: {{comment}}" },
+  profile_request:{ subject:"Vəzifə profili və qiymətləndirməniz gözlənilir: {{positionTitle}}",
+    lead:"HR {{department}} üçün yeni vəzifə qaralaması yaratdı. Zəhmət olmasa profili tamamlayın, 9 faktoru ballayın və HR-a göndərin.",
+    leadEn:"HR created a draft position for your department. Please complete the profile, score the 9 factors and send it to HR." }
+};
+function mailTemplateDoc(name) {
+  const m = MAIL_TEMPLATES[name];
+  const html = `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:15px;color:#1B1F24;max-width:560px">
+<div style="background:#14376F;color:#fff;padding:14px 18px;border-radius:10px 10px 0 0;font-weight:700">GS · Dərəcələndirmə Sistemi</div>
+<div style="border:1px solid #E3E8EF;border-top:0;padding:18px;border-radius:0 0 10px 10px">
+<p>Hörmətli {{recipientName}},</p><p>${m.lead}</p>
+<table style="font-size:14px;margin:12px 0"><tr><td style="color:#5B6672;padding-right:12px">Vəzifə</td><td><b>{{positionTitle}}</b></td></tr>
+<tr><td style="color:#5B6672;padding-right:12px">Vəzifə ID</td><td>{{positionId}}</td></tr><tr><td style="color:#5B6672;padding-right:12px">Departament</td><td>{{department}}</td></tr>
+{{#if grade}}<tr><td style="color:#5B6672;padding-right:12px">Dərəcə</td><td><b>{{grade}}</b></td></tr>{{/if}}</table>
+<p><a href="{{link}}" style="display:inline-block;background:#14376F;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">Sistemdə aç</a></p>
+<p style="color:#5B6672;font-size:13px">${m.leadEn}</p></div></div>`;
+  return { subject:m.subject, html, text:`${m.lead}\n{{positionTitle}} ({{positionId}}) — {{department}}\n{{link}}` };
+}
+const mailNote = n => n > 0 ? ` · ✉ ${t("mailQueued", { n })}` : "";
+async function notify(name, e, o = {}) {
+  try {
+    const snap = await getDocs(collection(db, "directory"));
+    const all = snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(u => u.notifyEmail && u.role && u.role !== "pending");
+    const pick = list => list.filter(u => u.id !== S.user.uid)
+      .filter(u => (o.uids || []).includes(u.id) || ((o.roles || []).includes(u.role) && (u.role !== "manager" || !o.dept || u.departmentId === o.dept)))
+      .filter(u => !normTxt(e.employeeEmail) || ![normTxt(u.notifyEmail), normTxt(u.email)].includes(normTxt(e.employeeEmail)));
+    let recips = pick(all);
+    if (!recips.length && o.fallback !== false) recips = all.filter(u => u.role === "admin" && u.id !== S.user.uid);
+    const data = { positionTitle:e.position?.jobTitle || "", positionId:e.position?.positionId || "", department:deptName(e.departmentId || e.position?.department),
+      grade:o.grade || e.evaluation?.finalGrade || "", actorName:S.profile?.displayName || S.user.email || "", comment:o.comment || "",
+      link:`${location.origin}${location.pathname}#/positions/${e.id}`, appUrl:`${location.origin}${location.pathname}` };
+    for (const u of recips) {
+      await addDoc(collection(db, "mail"), { to:u.notifyEmail, toUid:u.id, template:{ name, data:{ ...data, recipientName:u.displayName || "" } },
+        createdAt:serverTimestamp(), createdBy:S.user.uid, positionDocId:e.id || "" });
+    }
+    return recips.length;
+  } catch (err) { console.warn("notify", err); return 0; }
+}
+
+// S7 — HR evaluation (independent & blind to the manager's scores until HR has scored)
 async function scrEvaluate({ id, seq }) {
-  if (!isHR()) { toast(t("tNoAccessEval"), "warn"); location.replace(`#/positions/${id}`); return null; }
+  if (!canHREvaluate()) { toast(t("tNoAccessEval"), "warn"); location.replace(`#/positions/${id}`); return null; }
   await loadEmployees();
   const e = await loadOne(id);
   if (seq !== renderSeq) return null;
   if (!e) { toast(t("tNotFound"), "err"); location.replace("#/positions"); return null; }
+  if (isSelf(e)) { toast(t("conflictSelf"), "err"); location.replace(`#/positions/${id}`); return null; }
   const ev = clone(e.evaluation) || {};
   if (!S.evalState || S.evalState.id !== id) {
-    S.evalState = { id, e, scores:{ ...(ev.scores || {}) }, finalGrade:ev.finalGrade || "", finalTouched:!!ev.finalGrade, comments:ev.comments || "",
-      evaluationDate:ev.evaluationDate || today() };
+    const hrDone = scoreTotal(ev.scores).complete && ev.evaluatorUid === S.user.uid;
+    S.evalState = { id, e, scores:{ ...(ev.scores || {}) }, just:{ ...(ev.justifications || {}) }, finalGrade:ev.finalGrade || "", finalTouched:!!ev.finalGrade,
+      comments:ev.comments || "", calibrationNote:ev.calibrationNote || "", evaluationDate:ev.evaluationDate || today(),
+      revealed:hrDone || !e.managerEvaluation?.scores, blind:ev.blindScores ? { ...ev.blindScores } : (hrDone ? { ...ev.scores } : null) };
   } else S.evalState.e = e;
   return evalHTML();
 }
 function evalHTML() {
-  const es = S.evalState, e = es.e, p = e.position || {};
-  const st = scoreTotal(es.scores), rec = st.complete ? recommendGrade(st.total) : null;
+  const es = S.evalState, e = es.e, p = e.position || {}, me = e.managerEvaluation;
+  const st = scoreTotal(es.scores), rec = st.complete ? recommendGrade(st.total) : null, hints = profileHints(e);
   if (!es.finalTouched) es.finalGrade = rec || es.finalGrade || "";
   const differs = rec && es.finalGrade && es.finalGrade !== rec;
   const outRange = es.finalGrade && p.jobLevel && !inRange(es.finalGrade, p.jobLevel);
+  const cal = es.revealed ? calibration(me?.scores, es.scores) : null;
+  const fa = e.finalApproval;
   return `
-  <div class="page-head"><div><div class="label-caps">${esc(L(SEC12))}</div><h1>${t("evaluate")}: ${esc(e.fullName)}</h1>
-    <p class="sub">${esc(p.jobTitle)} · ${esc(deptName(e.departmentId))} · ${badge(e.status)}</p></div></div>
-  ${e.managerApproval?.decision === "returned" && e.status === "under_evaluation" ? `<div class="banner warn"><b>${t("mgrReturnedBanner")}${e.managerApproval.byName ? " — " + esc(e.managerApproval.byName) : ""}</b>${esc(e.managerApproval.comment || "")}</div>` : ""}
+  <div class="page-head"><div><div class="label-caps">${esc(L(SEC12))}</div><h1>${t("evaluate")}: ${esc(p.jobTitle)}</h1>
+    <p class="sub">${esc(p.positionId || "")} · ${esc(deptName(e.departmentId))} · ${badge(e.status)}</p>
+    <p class="small muted">👁 ${t("nameHidden")}</p></div></div>
+  ${fa?.decision === "returned" && e.status === "under_evaluation" ? `<div class="banner warn"><b>${t("dirReturnedBanner")}${fa.byName ? " — " + esc(fa.byName) : ""}</b>${esc(fa.comment || "")}</div>` : ""}
   <div class="eval-layout">
-    <aside class="summary"><div class="card sticky"><div class="label-caps">${t("profileSummary")}</div>
+    <aside class="summary"><div class="card sticky stack">
+      <div><div class="label-caps">${t("profileSummary")}</div>
       <h3 style="margin-top:6px">${esc(p.jobTitle)}</h3>
       <div class="small muted">${esc(levelName(p.jobLevel))} · ${esc(p.positionId || "")}</div>
       <details style="margin-top:10px"><summary style="cursor:pointer;min-height:44px;display:flex;align-items:center">${esc(L(SECTIONS[1]))}</summary>
@@ -1519,20 +1911,23 @@ function evalHTML() {
         <p class="small muted">${esc(fl(SECTIONS[3].fields[0]))}: ${esc(optLabel("education", e.knowledge?.minEducation) || "—")} · ${esc(e.knowledge?.experienceYears ?? "—")} ${S.lang === "en" ? "yrs" : "il"}</p>
         <p class="small muted">${esc(fl(SECTIONS[0].fields[9]))}: ${esc(p.directReports ?? 0)} · ${esc(fl(SECTIONS[0].fields[10]))}: ${esc(p.indirectReports ?? 0)}</p>
       </details>
-      <a href="#/positions/${esc(e.id)}" class="small">${t("viewFull")} →</a></div></aside>
-    <div class="factors">${FACTORS.map(f => `
-      <section class="card factor" aria-labelledby="fac-${f.key}">
-        <div class="row" style="justify-content:space-between"><h3 id="fac-${f.key}" style="margin:0">${esc(L(f))}</h3><span class="chip navy">${es.scores[f.key] ? es.scores[f.key] + " / 5" : "—"}</span></div>
-        <div class="small muted">${esc(S.lang === "en" ? f.dEn : f.dAz)}</div><div class="small muted" style="opacity:.8">${esc(S.lang === "en" ? f.dAz : f.dEn)}</div>
-        <div class="scale" role="group" aria-labelledby="fac-${f.key}">${SCALE.map((s, i) => `<button type="button" data-score="${f.key}" data-v="${i + 1}" aria-pressed="${Number(es.scores[f.key]) === i + 1}">
-          <b>${i + 1}</b><span>${esc(L(s))}</span></button>`).join("")}</div></section>`).join("")}</div>
+      <a href="#/positions/${esc(e.id)}" class="small">${t("viewFull")} →</a></div>
+      <div><div class="label-caps">${t("mgrEvaluation")}</div>
+        ${!me?.scores ? `<p class="small muted">${t("noMgrScores")}</p>`
+          : es.revealed ? `<p class="small">${esc(me.evaluatorName || "")} · <b>${scoreTotal(me.scores).total} / 45</b> · ${pill(me.recommendedGrade)}</p>${me.comments ? `<p class="small">${esc(me.comments)}</p>` : ""}${justList(me.justifications)}`
+          : `<p class="small muted">🔒 ${t("blindInfo")}</p><button class="btn btn-secondary btn-block" data-act="evreveal" ${st.complete ? "" : "disabled"}>${t("revealMgr")}</button>`}
+      </div></div></aside>
+    <div class="factors">${factorCardsHTML({ target:"hr", scores:es.scores, just:es.just, hints, compare:es.revealed ? me?.scores : null, compareLabel:t("mgrScore") })}</div>
     <aside class="result"><div class="card sticky stack">
       <div><div class="label-caps">${t("totalScore")}</div><div class="big">${st.total}<span class="muted" style="font-size:16px"> / 45</span></div>
-        <div class="small muted">${st.count} / 9 ${t("scored")}</div></div>
+        <div class="small muted">${st.count} / 9 ${t("scored")}${es.revealed && me?.scores ? ` · ${t("mgrScore")}: ${scoreTotal(me.scores).total}` : ""}</div></div>
       <div><div class="label-caps">${t("recommended")}</div><div style="margin-top:6px">${rec ? `<span class="pill lg">${rec}</span>` : `<span class="small muted">${t("scoreAll")}</span>`}</div></div>
       <div><div class="label-caps">${t("suggestedForLevel")}</div><div><b>${rangeText(p.jobLevel)}</b> <span class="small muted">${esc(p.jobLevel ? L(LEVELS[p.jobLevel]) : "")}</span></div></div>
+      ${cal ? `<div class="${cal.flagged ? "banner warn" : "banner info"}" style="margin:0"><b>${cal.flagged ? "⚠ " + esc(t("calFlag", { m:cal.maxGap, tg:cal.totalGap })) : "✓ " + t("calOk")}</b></div>
+        ${cal.flagged ? `<div class="field ${!es.calibrationNote.trim() ? "invalid" : ""}"><label for="evCal">${t("calNote")} <span class="req">*</span></label><textarea id="evCal" data-ev="calibrationNote">${esc(es.calibrationNote)}</textarea><span class="hint">${t("calHint")}</span></div>` : ""}` : ""}
       <div class="field"><label for="evFinal">${t("finalApproved")}</label><select id="evFinal" data-ev="finalGrade">${gradeOptions(es.finalGrade, t("select"))}</select>
         ${outRange ? `<span class="hint" style="color:var(--warn)">⚠ ${t("outOfRange")}</span>` : ""}</div>
+      ${consistencyHTML({ ...e, evaluation:{ ...(e.evaluation || {}), finalGrade:es.finalGrade } })}
       <div class="field ${differs && !es.comments.trim() ? "invalid" : ""}"><label for="evComments">${t("comments")}${differs ? ` <span class="req">*</span>` : ""}</label>
         <textarea id="evComments" data-ev="comments">${esc(es.comments)}</textarea>${differs ? `<span class="hint">${t("explainDiff")}</span>` : ""}</div>
       <div class="field"><label for="evDate">${t("evalDate")}</label><input type="date" id="evDate" data-ev="evaluationDate" value="${esc(es.evaluationDate)}"></div>
@@ -1543,49 +1938,59 @@ function evalHTML() {
     <a class="btn btn-ghost" href="#/positions/${esc(e.id)}">${t("cancel")}</a>
     <button type="button" class="btn btn-warn" data-act="evreturn">${t("returnChanges")}</button>
     <button type="button" class="btn btn-secondary" data-act="evsave">${t("saveScores")}</button>
-    ${isAdmin() ? `<button type="button" class="btn btn-ghost" data-act="evapprove">${t("approveDirect")}</button>` : ""}
-    <button type="button" class="btn btn-primary" data-act="evsend">${t("sendToManager")}</button>
+    <button type="button" class="btn btn-primary" data-act="evsend">${t("sendToDirector")}</button>
   </div>`;
 }
 function rerenderEval() {
   const y = window.scrollY, active = document.activeElement;
   const aid = active?.id, ds = active?.dataset?.score, dv = active?.dataset?.v;
   $("#main").innerHTML = evalHTML(); $$("textarea").forEach(autoGrow); window.scrollTo(0, y);
-  const el = aid ? document.getElementById(aid) : ds ? $(`[data-score="${ds}"][data-v="${dv}"]`) : null;
+  const el = aid ? document.getElementById(aid) : ds ? $(`[data-score="${ds}"][data-target="hr"][data-v="${dv}"]`) : null;
   if (el) { el.focus({ preventScroll:true }); if (el.tagName === "TEXTAREA") el.setSelectionRange(el.value.length, el.value.length); }
 }
+function focusInvalid(id) { const el = document.getElementById(id); el?.closest(".field")?.classList.add("invalid"); el?.scrollIntoView({ block:"center" }); el?.focus({ preventScroll:true }); }
 async function saveEval(mode) {
-  const es = S.evalState, e = es.e;
-  const st = scoreTotal(es.scores), rec = st.complete ? recommendGrade(st.total) : null;
+  const es = S.evalState, e = es.e, me = e.managerEvaluation;
+  const st = scoreTotal(es.scores), rec = st.complete ? recommendGrade(st.total) : null, hints = profileHints(e);
   const differs = rec && es.finalGrade && es.finalGrade !== rec;
   const comment = es.comments.trim();
-  if (mode === "approve" || mode === "send") {
+  const cal = calibration(me?.scores, es.scores);
+  if (mode === "send") {
     if (!st.complete || !es.finalGrade) { toast(t("tNeedAll"), "err"); return; }
-    if (differs && !comment) { toast(`${t("tNeedComment")} — ${t("explainDiff")}`, "err"); $("#evComments")?.focus(); return; }
-    if (mode === "approve" && !(await confirmDlg(t("confirmApprove", { g:es.finalGrade }), "", t("approve")))) return;
-    if (mode === "send" && !(await confirmDlg(t("confirmSend", { g:es.finalGrade, d:deptName(e.departmentId) }), "", t("sendToManager")))) return;
+    const mj = missingJustifications(es.scores, es.just, hints);
+    if (mj.length) { toast(t("tNeedJust"), "err"); focusInvalid(`just-hr-${mj[0]}`); return; }
+    if (me?.scores && !es.revealed) { toast(t("tRevealFirst"), "err"); $("[data-act=evreveal]")?.focus(); return; }
+    if (cal?.flagged && !es.calibrationNote.trim()) { toast(t("tNeedCal"), "err"); focusInvalid("evCal"); return; }
+    if (differs && !comment) { toast(`${t("tNeedComment")} — ${t("explainDiff")}`, "err"); focusInvalid("evComments"); return; }
+    if (!(await confirmDlg(t("confirmSendDir", { g:es.finalGrade }), "", t("sendToDirector")))) return;
   }
   if (mode === "return") {
-    if (!comment) { toast(t("tNeedComment"), "err"); $("#evComments")?.closest(".field")?.classList.add("invalid"); $("#evComments")?.focus(); return; }
+    if (!comment) { toast(t("tNeedComment"), "err"); focusInvalid("evComments"); return; }
     if (!(await confirmDlg(t("confirmReturn"), "", t("returnChanges")))) return;
   }
-  if (mode === "save" && differs && !comment) { toast(`${t("tNeedComment")} — ${t("explainDiff")}`, "err"); $("#evComments")?.focus(); return; }
-  const status = mode === "approve" ? "approved" : mode === "send" ? "manager_approval" : mode === "return" ? "returned" : "under_evaluation";
+  if (mode === "save" && differs && !comment) { toast(`${t("tNeedComment")} — ${t("explainDiff")}`, "err"); focusInvalid("evComments"); return; }
+  const status = mode === "send" ? "director_approval" : mode === "return" ? "returned" : "under_evaluation";
+  const scores = Object.fromEntries(FACTORS.filter(f => es.scores[f.key]).map(f => [f.key, Number(es.scores[f.key])]));
+  const changed = es.blind ? FACTORS.filter(f => Number(es.blind[f.key]) !== Number(scores[f.key])).map(f => f.key) : [];
   const evaluation = {
-    scores:Object.fromEntries(FACTORS.filter(f => es.scores[f.key]).map(f => [f.key, Number(es.scores[f.key])])),
-    totalScore:st.total, recommendedGrade:rec, finalGrade:es.finalGrade || "", comments:comment, approvalStatus:status,
+    scores, totalScore:st.total, recommendedGrade:rec, finalGrade:es.finalGrade || "", comments:comment, approvalStatus:status,
+    justifications:Object.fromEntries(Object.entries(es.just).filter(([, v]) => (v || "").trim())),
+    calibrationNote:(es.calibrationNote || "").trim(), calibrationFlagged:!!cal?.flagged, maxGap:cal?.maxGap ?? null, totalGap:cal?.totalGap ?? null,
+    blindScores:es.blind || null, changedAfterReveal:changed,
     evaluationDate:es.evaluationDate || today(), evaluatorName:S.profile?.displayName || S.user.email || "", evaluatorUid:S.user.uid
   };
-  const upd = { status, evaluation, updatedAt:serverTimestamp(), updatedBy:S.user.uid };
-  if (mode === "approve") { upd["position.currentGrade"] = es.finalGrade; upd["position.lastEvaluationDate"] = today(); upd.returnComment = ""; }
+  const action = mode === "send" ? "sent_to_director" : mode === "return" ? "returned_to_manager" : "hr_saved";
+  const upd = { status, evaluation, updatedAt:serverTimestamp(), updatedBy:S.user.uid,
+    history:arrayUnion(histEntry(action, mode === "return" ? comment : `${st.total}/45${es.finalGrade ? " · " + es.finalGrade : ""}${cal?.flagged ? " · ⚠" : ""}`)) };
   if (mode === "return") upd.returnComment = comment;
-  if (mode === "send") upd.managerApproval = { decision:"pending", comment:"", byUid:"", byName:"", date:"", sentAt:today(), sentBy:evaluation.evaluatorName };
-  if (mode === "approve") upd.managerApproval = { decision:"approved", comment:"", byUid:S.user.uid, byName:evaluation.evaluatorName + " (Admin)", date:today() };
   $$(".actionbar .btn").forEach(b => b.disabled = true);
   try {
     await updateDoc(doc(db, "employees", e.id), upd);
+    let n = 0;
+    if (mode === "send") n = await notify("approval_request", e, { roles:["hr_director"], grade:es.finalGrade });
+    if (mode === "return") n = await notify("evaluation_returned", e, { roles:["manager"], dept:e.departmentId, comment });
     S.employees = null; S.evalState = null;
-    toast(mode === "approve" ? t("tApproved") : mode === "send" ? t("tSentToManager") : mode === "return" ? t("tReturned") : t("tSaved"), "ok");
+    toast((mode === "send" ? t("tSentToDirector") : mode === "return" ? t("tReturned") : t("tSaved")) + mailNote(n), "ok");
     location.hash = `#/positions/${e.id}`;
   } catch (err) { toast(errMsg(err), "err"); $$(".actionbar .btn").forEach(b => b.disabled = false); }
 }
@@ -1715,13 +2120,43 @@ async function scrReports() {
       <button class="btn btn-primary btn-block" data-act="exportB">${icon("export")} ${t("exportXlsx")}</button></section>
     <section class="card stack"><div><h2>${t("repC")}</h2><p class="small muted">${t("repCDesc")}</p></div>
       <a class="btn btn-secondary btn-block" href="#/positions">${t("goPositions")}</a></section>
-  </div>`;
+  </div>
+  ${isDirector() ? evaluatorStatsHTML(S.employees || []) : ""}`;
+}
+
+// (7) Evaluator statistics — who scores consistently higher / lower
+function evaluatorStatsHTML(list) {
+  const rows = {};
+  const add = (name, type, sc, other, hints, flagged) => {
+    if (!sc || !scoreTotal(sc).complete) return;
+    const k = type + "|" + (name || "—"), r = rows[k] ??= { name:name || "—", type, n:0, tot:0, dev:0, devN:0, gap:0, gapN:0, flags:0 };
+    r.n++; r.tot += scoreTotal(sc).total;
+    FACTORS.forEach(f => { if (hints[f.key]) { r.dev += Number(sc[f.key]) - hints[f.key]; r.devN++; } });
+    if (other && scoreTotal(other).complete) { r.gap += scoreTotal(sc).total - scoreTotal(other).total; r.gapN++; }
+    if (flagged) r.flags++;
+  };
+  list.forEach(e => {
+    const h = profileHints(e), cal = calibration(e.managerEvaluation?.scores, e.evaluation?.scores);
+    add(e.managerEvaluation?.evaluatorName, "mgr", e.managerEvaluation?.scores, e.evaluation?.scores, h, cal?.flagged);
+    add(e.evaluation?.evaluatorName, "hr", e.evaluation?.scores, e.managerEvaluation?.scores, h, cal?.flagged);
+  });
+  const fmt = x => (x > 0 ? "+" : "") + x.toFixed(1);
+  const data = Object.values(rows).sort((a, b) => b.n - a.n);
+  return `<section class="card" style="margin-top:16px"><h2>${t("evalStats")}</h2><p class="small muted">${t("evalStatsDesc")}</p>
+    ${data.length ? `<div class="table-wrap-always"><table class="tbl cmp"><thead><tr><th>${t("stEvaluator")}</th><th>${t("stType")}</th><th>${t("stCount")}</th><th>${t("stAvg")}</th><th>${t("stDev")}</th><th>${t("stGap")}</th><th>${t("stFlag")}</th></tr></thead><tbody>
+    ${data.map(r => { const dev = r.devN ? r.dev / r.devN : 0, gap = r.gapN ? r.gap / r.gapN : 0;
+      return `<tr><td>${esc(r.name)}</td><td>${r.type === "mgr" ? t("mgrScore") : "HR"}</td><td>${r.n}</td><td>${(r.tot / r.n).toFixed(1)}</td>
+      <td class="${Math.abs(dev) >= 0.75 ? "gapwarn" : ""}">${r.devN ? fmt(dev) + "/" + (S.lang === "en" ? "factor" : "faktor") : "—"}</td><td class="${Math.abs(gap) >= 3 ? "gapwarn" : ""}">${r.gapN ? fmt(gap) : "—"}</td><td>${r.flags}</td></tr>`; }).join("")}
+    </tbody></table></div>` : `<p class="muted">${t("noScores")}</p>`}</section>`;
 }
 
 // S10 — Admin → Users
 async function scrAdmin() {
   const snap = await getDocs(collection(db, "users"));
   S.users = snap.docs.map(d => ({ id:d.id, ...d.data() })).sort((a, b) => (a.displayName || a.email || "").localeCompare(b.displayName || b.email || ""));
+  await syncDirectory(S.users);
+  let mails = [];
+  try { mails = (await getDocs(collection(db, "mail"))).docs.map(d => ({ id:d.id, ...d.data() })).sort((a, b) => tsMs(b.createdAt) - tsMs(a.createdAt)); } catch (e) { console.warn(e); }
   const managed = new Set(S.users.filter(u => u.role === "manager" && u.departmentId).map(u => u.departmentId));
   const noMgr = DEPARTMENTS.filter(d => !managed.has(d.code));
   return `<div class="page-head"><div><h1>${t("usersTitle")}</h1><p class="sub">${t("usersSub")}</p></div></div>
@@ -1739,15 +2174,43 @@ async function scrAdmin() {
       <div class="field sel ${needDept ? "invalid" : ""}"><label for="ud-${esc(u.id)}" class="small">${t("department")}</label>
         <select id="ud-${esc(u.id)}" data-udept="${esc(u.id)}"><option value="">${t("noDept")}</option>${DEPARTMENTS.map(d => `<option value="${d.code}" ${u.departmentId === d.code ? "selected" : ""}>${esc(d.code)} · ${esc(L(d))}</option>`).join("")}</select>
         ${needDept ? `<span class="hint" style="color:var(--danger)">${t("deptRequired")}</span>` : ""}</div>
+      <div class="field sel"><label for="un-${esc(u.id)}" class="small">${t("notifyEmail")}</label>
+        <input type="text" inputmode="email" id="un-${esc(u.id)}" data-unotify="${esc(u.id)}" value="${esc(u.notifyEmail || u.email || "")}"></div>
       <div class="last small muted">${t("lastSignIn")}<br>${esc(fmtDate(u.lastLogin) || "—")}</div></div>`;
   }).join("")}</div></section>
+  <section class="card" style="margin-bottom:16px"><h2>${t("mailTitle")}</h2><p class="small muted">${t("mailDesc")}</p>
+    <button class="btn btn-secondary" data-act="mailtpl">${t("mailInstall")}</button>
+    ${mails.length ? `<div class="table-wrap-always" style="margin-top:12px"><table class="tbl cmp"><thead><tr><th>${t("mailDate")}</th><th>${t("mailTo")}</th><th>${t("mailTpl")}</th><th>${t("mailState")}</th></tr></thead><tbody>
+      ${mails.slice(0, 20).map(m => `<tr><td class="small">${esc(fmtDate(m.createdAt))}</td><td class="small">${esc(m.to)}</td><td class="small">${esc(m.template?.name || "")}</td>
+      <td class="small">${m.delivery?.state ? esc(m.delivery.state) + (m.delivery.error ? " — " + esc(m.delivery.error) : "") : `<span class="muted">${t("mailPending")}</span>`}</td></tr>`).join("")}</tbody></table></div>`
+      : `<p class="small muted" style="margin-top:12px">${t("mailNone")}</p>`}</section>
   <section class="card"><h2>${t("sampleTitle")}</h2><p class="muted">${t("sampleDesc")}</p>
     <button class="btn btn-secondary" data-act="sample">${t("loadSample")}</button></section>`;
 }
+// Directory = the part of each user that others need for routing e-mails (role, department, Outlook address)
+const dirEntry = u => ({ uid:u.id || u.uid, displayName:u.displayName || "", email:u.email || "", notifyEmail:(u.notifyEmail || u.email || "").trim(), role:u.role || "pending", departmentId:u.departmentId || null });
+async function syncDirectory(users) {
+  try {
+    const cur = Object.fromEntries((await getDocs(collection(db, "directory"))).docs.map(d => [d.id, d.data()]));
+    for (const u of users) {
+      const want = dirEntry(u), have = cur[want.uid];
+      if (!have || ["displayName", "email", "notifyEmail", "role", "departmentId"].some(k => (have[k] ?? null) !== (want[k] ?? null))) await setDoc(doc(db, "directory", want.uid), want);
+    }
+  } catch (e) { console.warn("directory", e); }
+}
+async function installMailTemplates() {
+  try {
+    const b = writeBatch(db);
+    Object.keys(MAIL_TEMPLATES).forEach(n => b.set(doc(db, "mailTemplates", n), mailTemplateDoc(n)));
+    await b.commit(); toast(t("tTemplates"), "ok");
+  } catch (e) { toast(errMsg(e), "err"); }
+}
 async function saveUser(uid, changes) {
   try {
+    if ("notifyEmail" in changes) { const v = changes.notifyEmail.trim(); if (v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { toast(t("tBadEmail"), "err"); return; } changes.notifyEmail = v; }
     await updateDoc(doc(db, "users", uid), changes);
     const u = S.users?.find(x => x.id === uid); if (u) Object.assign(u, changes);
+    if (u) await setDoc(doc(db, "directory", uid), dirEntry(u));
     toast(t("tSaved"), "ok");
     if (u && u.role === "manager" && !u.departmentId) toast(t("deptRequired"), "warn");
     render();
@@ -1760,7 +2223,7 @@ async function loadSample() {
     const list = await loadEmployees(true);
     const codes = new Set(list.map(e => (e.employeeCode || "").trim()));
     let added = 0, skipped = 0;
-    for (const rec of SAMPLE_DATA) {
+    for (const rec of sampleRecords()) {
       if (codes.has(rec.employeeCode)) { skipped++; continue; }
       await addDoc(collection(db, "employees"), { ...clone(rec), createdBy:S.user.uid, updatedBy:S.user.uid, createdAt:serverTimestamp(), updatedAt:serverTimestamp() });
       codes.add(rec.employeeCode); added++;
@@ -1799,13 +2262,17 @@ function exportA(filters) {
     level:fl(SECTIONS[0].fields[4]), cur:fl(SECTIONS[0].fields[3]), total:H("Total Score","Ümumi bal"), rec:H("Recommended Grade","Tövsiyə olunan dərəcə"),
     fin:H("Final Grade","Yekun dərəcə"), st:t("status"), date:H("Evaluation Date","Qiymətləndirmə tarixi"), ev:H("Evaluator","Qiymətləndirici") };
   const fh = FACTORS.map(f => L(f));
-  const headers = [c.code, c.name, c.pid, c.title, c.dept, c.level, c.cur, ...fh, c.total, c.rec, c.fin, c.st, c.date, c.ev];
+  const headers = [c.code, c.name, c.pid, c.title, c.dept, c.level, c.cur, ...fh, H("Manager Total","Menecer cəmi"), c.total, H("Gap (HR − Manager)","Fərq (HR − Menecer)"), H("Calibration flag","Kalibrasiya"), c.rec, c.fin, c.st, c.date, c.ev];
   const rows = list.map(e => {
     const ev = e.evaluation || {}, p = e.position || {};
     const r = { [c.code]:e.employeeCode || "", [c.name]:e.fullName || "", [c.pid]:p.positionId || "", [c.title]:p.jobTitle || "", [c.dept]:deptName(e.departmentId),
       [c.level]:levelName(p.jobLevel), [c.cur]:p.currentGrade || "" };
     FACTORS.forEach((f, i) => r[fh[i]] = ev.scores?.[f.key] ?? "");
     const st = scoreTotal(ev.scores);
+    const ms = e.managerEvaluation?.scores, cal = calibration(ms, ev.scores);
+    r[H("Manager Total","Menecer cəmi")] = ms && scoreTotal(ms).complete ? scoreTotal(ms).total : "";
+    r[H("Gap (HR − Manager)","Fərq (HR − Menecer)")] = cal ? cal.totalGap : "";
+    r[H("Calibration flag","Kalibrasiya")] = cal ? (cal.flagged ? H("Yes","Bəli") : H("No","Xeyr")) : "";
     Object.assign(r, { [c.total]:ev.scores ? (ev.totalScore ?? st.total) : "", [c.rec]:ev.recommendedGrade || "", [c.fin]:ev.finalGrade || "", [c.st]:statusLabel(e.status),
       [c.date]:ev.evaluationDate || "", [c.ev]:ev.evaluatorName || "" });
     return r;
@@ -1837,11 +2304,14 @@ function evalRow(e) {
   const ev = e.evaluation || {};
   const o = { [fl(SECTIONS[0].fields[5])]:e.position?.positionId || "", [fl(TOP_FIELDS[0])]:e.employeeCode || "", [fl(TOP_FIELDS[1])]:e.fullName || "" };
   EVAL_FIELDS.forEach(f => { const v = getP(ev, f[0]); o[fl(f)] = f[3] === "status" ? (e.evaluation ? statusLabel(e.status) : "") : (v ?? ""); });
-  const ma = e.managerApproval || {};
-  o[t("mgrDecision")] = ma.decision ? t("dec_" + ma.decision) : ""; o[t("mgrBy")] = ma.byName || ""; o[t("mgrDate")] = ma.date || ""; o[t("mgrComment")] = ma.comment || "";
+  const fa = e.finalApproval || {}, me = e.managerEvaluation || {}, cal = calibration(me.scores, ev.scores);
+  FACTORS.forEach(f => o[`${t("mgrScore")}: ${L(f)}`] = me.scores?.[f.key] ?? "");
+  o[t("mgrEvaluation")] = me.scores ? scoreTotal(me.scores).total : ""; o[`${t("mgrScore")} — ${t("evaluator")}`] = me.evaluatorName || "";
+  o[t("calibration")] = cal ? (cal.flagged ? t("yes") : t("no")) : ""; o[t("calNote")] = ev.calibrationNote || "";
+  o[t("finalDecision")] = fa.decision ? t("dec_" + fa.decision) : ""; o[t("finalApproval")] = fa.byName || ""; o[t("mgrDate")] = fa.date || ""; o[t("dirComment")] = fa.comment || "";
   return o;
 }
-const evalHeaders = () => [fl(SECTIONS[0].fields[5]), fl(TOP_FIELDS[0]), fl(TOP_FIELDS[1]), ...EVAL_FIELDS.map(fl), t("mgrDecision"), t("mgrBy"), t("mgrDate"), t("mgrComment")];
+const evalHeaders = () => [fl(SECTIONS[0].fields[5]), fl(TOP_FIELDS[0]), fl(TOP_FIELDS[1]), ...EVAL_FIELDS.map(fl), ...FACTORS.map(f => `${t("mgrScore")}: ${L(f)}`), t("mgrEvaluation"), `${t("mgrScore")} — ${t("evaluator")}`, t("calibration"), t("calNote"), t("finalDecision"), t("finalApproval"), t("mgrDate"), t("dirComment")];
 function exportB(filters) {
   if (!xlsxReady()) return;
   const list = sortByUpdated(filterList(scopeList(S.employees || []), filters));
@@ -1871,13 +2341,19 @@ async function exportC(id) {
   });
   const sec12 = `12. ${L(SEC12)}`;
   EVAL_FIELDS.forEach(f => { const v = getP(e.evaluation || {}, f[0]); add(sec12, fl(f), f[3] === "status" ? (e.evaluation ? statusLabel(e.status) : "") : v); });
-  const ma = e.managerApproval || {};
-  if (ma.decision) { add(sec12, t("mgrDecision"), t("dec_" + ma.decision)); add(sec12, t("mgrBy"), ma.byName); add(sec12, t("mgrDate"), ma.date); add(sec12, t("mgrComment"), ma.comment); }
+  const me = e.managerEvaluation || {}, fa = e.finalApproval || {};
+  const s12a = `12A. ${t("mgrEvaluation")}`;
+  FACTORS.forEach(f => add(s12a, L(f), me.scores?.[f.key] ?? ""));
+  if (me.scores) { add(s12a, t("totalScore"), scoreTotal(me.scores).total); add(s12a, t("evaluator"), me.evaluatorName); add(s12a, t("mgrComment"), me.comments); }
+  if (e.evaluation?.calibrationNote) add(sec12, t("calNote"), e.evaluation.calibrationNote);
+  if (fa.decision) { add(sec12, t("finalDecision"), t("dec_" + fa.decision)); add(sec12, t("finalApproval"), fa.byName); add(sec12, t("mgrDate"), fa.date); add(sec12, t("dirComment"), fa.comment); }
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, makeSheet(rows, [cs, cf, cv]), t("sheetJD"));
   const rh = [t("no_"), ...SECTIONS[2].fields.map(fl)];
   XLSX.utils.book_append_sheet(wb, makeSheet((e.responsibilities || []).map((r, i) => {
     const o = { [t("no_")]:i + 1 }; SECTIONS[2].fields.forEach(f => o[fl(f)] = xv(f, r[f[0]])); return o; }), rh), t("sheetResp"));
+  const hh = [t("mailDate"), t("history"), t("evaluator"), t("dirComment")];
+  XLSX.utils.book_append_sheet(wb, makeSheet((e.history || []).map(x => ({ [hh[0]]:String(x.at || "").replace("T", " ").slice(0, 16), [hh[1]]:t("h_" + x.action), [hh[2]]:x.byName || "", [hh[3]]:x.note || "" })), hh), t("history"));
   XLSX.writeFile(wb, `${sanitizeFile(e.position?.positionId)}-${sanitizeFile(e.fullName)}.xlsx`);
   toast(t("tExported"), "ok");
 }
@@ -1891,7 +2367,7 @@ document.addEventListener("click", async ev => {
   if (!el) return;
   if (el.dataset.go) { location.hash = el.dataset.go; return; }
   if (el.dataset.acc) {
-    const n = Number(el.dataset.acc), sec = el.closest(".acc"), body = sec.querySelector(".acc-b");
+    const n = isNaN(el.dataset.acc) ? el.dataset.acc : Number(el.dataset.acc), sec = el.closest(".acc"), body = sec.querySelector(".acc-b");
     const open = !S.open.has(n); open ? S.open.add(n) : S.open.delete(n);
     sec.classList.toggle("open", open); el.setAttribute("aria-expanded", open); body.hidden = !open;
     if (open) body.querySelectorAll("textarea").forEach(autoGrow);
@@ -1909,11 +2385,13 @@ document.addEventListener("click", async ev => {
     if (S.form.data.responsibilities.length <= 1) return;
     S.form.data.responsibilities.splice(i, 1); S.dirty = true; rerenderForm(); return;
   }
-  if (el.dataset.score && S.evalState) {
+  if (el.dataset.score) {
     const k = el.dataset.score, v = Number(el.dataset.v);
-    S.evalState.scores[k] = Number(S.evalState.scores[k]) === v ? undefined : v;
-    if (S.evalState.scores[k] === undefined) delete S.evalState.scores[k];
-    rerenderEval(); return;
+    const target = el.dataset.target === "mgr" ? S.form?.data?.managerEvaluation?.scores : S.evalState?.scores;
+    if (!target) return;
+    if (Number(target[k]) === v) delete target[k]; else target[k] = v;
+    if (el.dataset.target === "mgr") { S.dirty = true; rerenderForm(); } else rerenderEval();
+    return;
   }
   if (el.dataset.sort) { const k = el.dataset.sort; S.sort = { key:k, dir:S.sort.key === k ? -S.sort.dir : 1 }; renderPosResults(); return; }
   if (el.dataset.libdept !== undefined) { S.libDept = el.dataset.libdept; $$("[data-libdept]").forEach(b => b.setAttribute("aria-pressed", b.dataset.libdept === S.libDept)); renderLib(); return; }
@@ -1948,7 +2426,6 @@ document.addEventListener("click", async ev => {
     case "savedraft": saveForm(false); break;
     case "submitform": saveForm(true); break;
     case "evsave": saveEval("save"); break;
-    case "evapprove": saveEval("approve"); break;
     case "evsend": saveEval("send"); break;
     case "libedit": startLibEdit(); break;
     case "sharelink": copyShareLink(); break;
@@ -1965,8 +2442,11 @@ document.addEventListener("click", async ev => {
       if (S.libEdit[ci].rows.some(r => r.name.trim().toLowerCase() === v.toLowerCase())) { toast(t("tDupTitle", { t:v }), "err"); break; }
       S.libEdit[ci].rows.push({ name:v, level:"" }); rerenderLibEdit(`lnew-${ci}`); break;
     }
-    case "mgrapprove": mgrDecide(el.dataset.id, "approved"); break;
-    case "mgrreturn": mgrDecide(el.dataset.id, "returned"); break;
+
+    case "evreveal": if (scoreTotal(S.evalState.scores).complete) { S.evalState.revealed = true; S.evalState.blind = { ...S.evalState.scores }; rerenderEval(); } break;
+    case "dirapprove": directorDecide(el.dataset.id, "approved"); break;
+    case "dirreturn": directorDecide(el.dataset.id, "returned"); break;
+    case "mailtpl": installMailTemplates(); break;
     case "evreturn": saveEval("return"); break;
   }
 });
@@ -1983,12 +2463,20 @@ document.addEventListener("input", e => {
   if (S.libEdit && el.dataset.le) { const [ci, k] = el.dataset.le.split("."); S.libEdit[ci][k] = k === "code" ? el.value.toUpperCase() : el.value; return; }
   if (S.libEdit && el.dataset.lt) { const [ci, ti] = el.dataset.lt.split(".").map(Number); S.libEdit[ci].rows[ti].name = el.value; return; }
   if (el.id === "titleSearch" && S.form) { S.form.titleSearch = el.value; rerenderForm(); return; }
+  if (el.dataset.just) {
+    const tgt = el.dataset.target === "mgr" ? S.form?.data?.managerEvaluation : S.evalState;
+    if (tgt) { const j = el.dataset.target === "mgr" ? (tgt.justifications ??= {}) : (tgt.just ??= {}); j[el.dataset.just] = el.value; if (el.dataset.target === "mgr") S.dirty = true; }
+    el.closest(".factor")?.classList.toggle("needs", !el.value.trim()); el.closest(".field")?.classList.remove("invalid");
+    return;
+  }
+  if (el.dataset.mgrcomment && S.form) { S.form.data.managerEvaluation.comments = el.value; S.dirty = true; return; }
   if (el.dataset.ev && S.evalState) {
     S.evalState[el.dataset.ev] = el.value;
     if (el.dataset.ev === "comments") {
       const st = scoreTotal(S.evalState.scores), rec = st.complete ? recommendGrade(st.total) : null;
       el.closest(".field").classList.toggle("invalid", !!(rec && S.evalState.finalGrade && S.evalState.finalGrade !== rec && !el.value.trim()));
     }
+    if (el.dataset.ev === "calibrationNote") el.closest(".field").classList.toggle("invalid", !el.value.trim());
     return;
   }
   if (!S.form) return;
@@ -2021,6 +2509,7 @@ document.addEventListener("change", e => {
   if (el.dataset.demorole) { switchDemoRole(el.value); return; }
   if (el.dataset.urole) { saveUser(el.dataset.urole, { role:el.value }); return; }
   if (el.dataset.udept) { saveUser(el.dataset.udept, { departmentId:el.value || null }); return; }
+  if (el.dataset.unotify) { saveUser(el.dataset.unotify, { notifyEmail:el.value }); return; }
   if (!S.form) return;
   const d = S.form.data;
   if (el.dataset.dept) {

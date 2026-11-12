@@ -3,54 +3,99 @@ service cloud.firestore {
   match /databases/{db}/documents {
     function signedIn() { return request.auth != null; }
     function me() { return get(/databases/$(db)/documents/users/$(request.auth.uid)).data; }
-    function isAdmin() { return signedIn() && me().role == "admin"; }
-    function isHR() { return signedIn() && me().role in ["admin", "hr"]; }
-    function isManager() { return signedIn() && me().role == "manager"; }
+    function myRole() { return me().role; }
+    function isAdmin() { return signedIn() && myRole() == "admin"; }
+    function isStaffHR() { return signedIn() && myRole() in ["admin", "hr_director", "hr"]; }   // evaluators + director
+    function isDirector() { return signedIn() && myRole() in ["admin", "hr_director"]; }       // final approval
+    function isManager() { return signedIn() && myRole() == "manager"; }
+    function isActive() { return signedIn() && exists(/databases/$(db)/documents/users/$(request.auth.uid)) && myRole() != "pending"; }
+    function myEmail() { return request.auth.token.get("email", ""); }
+    // Conflict of interest: the employee on the record is not the person acting
+    function notSelf(data) { return data.get("employeeEmail", "") == "" || data.get("employeeEmail", "") != myEmail(); }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
 
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow create: if signedIn() && request.auth.uid == uid && request.resource.data.role == "pending";
       allow update: if isAdmin()
-        || (request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["lang","theme","lastLogin","displayName","photoURL"]));
+        || (request.auth.uid == uid && changed().hasOnly(["lang", "theme", "lastLogin", "displayName", "photoURL"]));
       allow delete: if false;
     }
 
-    // Job title library (departments, titles, level overrides). Everyone signed in reads it; only Admin edits it.
+    // Routing directory for e-mail notifications (name, role, department, Outlook address). Maintained by Admin.
+    match /directory/{uid} {
+      allow read: if isActive();
+      allow write: if isAdmin();
+    }
+
+    // Outgoing e-mail queue, processed by the "Trigger Email from Firestore" extension (Microsoft 365 SMTP).
+    // Only fixed templates, only to addresses that are in the directory.
+    match /mail/{id} {
+      allow create: if isActive()
+        && request.resource.data.keys().hasOnly(["to", "toUid", "template", "createdAt", "createdBy", "positionDocId"])
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.template.keys().hasOnly(["name", "data"])
+        && request.resource.data.template.name in ["evaluation_request", "evaluation_returned", "approval_request", "approved", "approval_returned", "profile_request"]
+        && request.resource.data.to == get(/databases/$(db)/documents/directory/$(request.resource.data.toUid)).data.notifyEmail;
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+    match /mailTemplates/{name} {
+      allow read, write: if isAdmin();
+    }
+
+    // Job title library. Everyone signed in reads it; only Admin edits it.
     match /departments/{code} {
       allow read: if signedIn();
       allow write: if isAdmin();
     }
 
     match /employees/{id} {
-      allow read: if isHR() || (isManager() && resource.data.departmentId == me().departmentId);
-      allow create: if isHR()
+      allow read: if isStaffHR() || (isManager() && resource.data.departmentId == me().departmentId);
+
+      allow create: if isAdmin()
+        // HR may open a draft for a department (the manager then scores and submits)
+        || (isStaffHR()
+            && request.resource.data.status == "draft"
+            && request.resource.data.get("evaluation", null) == null
+            && request.resource.data.get("managerEvaluation", null) == null
+            && request.resource.data.get("finalApproval", null) == null)
+        // Manager: own department, step 1 only
         || (isManager()
             && request.resource.data.departmentId == me().departmentId
             && request.resource.data.get("evaluation", null) == null
-            && request.resource.data.status in ["draft", "submitted"]);
+            && request.resource.data.get("finalApproval", null) == null
+            && request.resource.data.status in ["draft", "submitted"]
+            && notSelf(request.resource.data));
+
       allow update: if isAdmin()
-        // HR: everything except giving the final approval (that is the department manager's step)
-        || (isHR()
-            && (request.resource.data.status != "approved"
-                || (resource.data.status == "approved"
-                    && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["evaluation", "managerApproval"]))))
-        // Manager: edit own department's profile while draft / returned (sections 1–11 only)
+        // HR evaluator / director: profile + HR evaluation. Never the manager's scores, never the final approval.
+        || (isStaffHR()
+            && !changed().hasAny(["managerEvaluation", "finalApproval", "managerApproval"])
+            && (request.resource.data.status in ["draft", "submitted", "under_evaluation", "returned", "director_approval"]
+                || (resource.data.status == "approved" && request.resource.data.status == "approved" && !changed().hasAny(["evaluation"])))
+            && (!changed().hasAny(["evaluation"])
+                || (notSelf(resource.data) && request.resource.data.evaluation.evaluatorUid == request.auth.uid)))
+        // Manager: own department, while draft / returned; may write own scores (not for own position)
         || (isManager()
             && resource.data.departmentId == me().departmentId
             && request.resource.data.departmentId == me().departmentId
             && resource.data.status in ["draft", "returned"]
             && request.resource.data.status in ["draft", "submitted"]
-            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["evaluation", "managerApproval"]))
-        // Manager: approve the HR-proposed grade, or return it to HR
-        || (isManager()
-            && resource.data.departmentId == me().departmentId
-            && resource.data.status == "manager_approval"
+            && !changed().hasAny(["evaluation", "finalApproval", "managerApproval"])
+            && (!changed().hasAny(["managerEvaluation"]) || notSelf(resource.data)))
+        // HR Director / HR Manager: final approval or return to HR (four-eyes + conflict of interest)
+        || (isDirector()
+            && resource.data.status in ["director_approval", "manager_approval"]
             && request.resource.data.status in ["approved", "under_evaluation"]
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "position", "managerApproval", "updatedAt", "updatedBy"])
+            && changed().hasOnly(["status", "position", "finalApproval", "history", "updatedAt", "updatedBy"])
             && request.resource.data.position.diff(resource.data.position).affectedKeys().hasOnly(["currentGrade", "lastEvaluationDate"])
-            && request.resource.data.managerApproval.byUid == request.auth.uid
+            && request.resource.data.finalApproval.byUid == request.auth.uid
+            && resource.data.evaluation.get("evaluatorUid", "") != request.auth.uid
+            && notSelf(resource.data)
             && (request.resource.data.status != "approved"
                 || request.resource.data.position.currentGrade == resource.data.evaluation.finalGrade));
+
       allow delete: if isAdmin();
     }
   }

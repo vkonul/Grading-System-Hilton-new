@@ -25,21 +25,37 @@ Lokal işə salmaq: istənilən statik server, məsələn `npx serve .` və ya V
 ## Rollar
 | Rol | İmkanlar |
 |---|---|
-| Admin | Hər şey: rollar, nümunə məlumat, silmə, bütün hesabatlar |
-| HR qiymətləndirici | Bütün vəzifələr, 12-ci bölmə (qiymətləndirmə), təsdiq/qaytarma |
-| Departament meneceri | Yalnız öz departamenti, 1–11-ci bölmələr, göndərmə |
+| Admin | Hər şey: rollar, nümunə məlumat, silmə, bütün hesabatlar; ehtiyat təsdiqləyici |
+| HR direktoru / HR meneceri | Yekun təsdiq (öz qiymətləndirdiyi və öz vəzifəsi xaric), statistika |
+| HR qiymətləndirici | Bütün vəzifələr, müstəqil HR qiymətləndirməsi, HR direktoruna göndərmə / menecerə qaytarma |
+| Departament meneceri | Yalnız öz departamenti, 1–11-ci bölmələr + menecer qiymətləndirməsi (12A), HR-a göndərmə |
 | Gözləmədə | "Rol gözlənilir" ekranı |
 
 ## Proses (status axını)
 ```
-Qaralama → (Menecer göndərir) Göndərilib → (HR ballayır) Qiymətləndirilir
-   → (HR "Menecerin təsdiqinə göndər") Menecer təsdiqində → (Departament meneceri təsdiqləyir) Təsdiqlənib
-                                                       ↘ (Menecer şərhlə HR-a qaytarır) Qiymətləndirilir
-HR profili natamam görsə → Qaytarılıb → Menecer düzəldib yenidən göndərir
+Qaralama ──(Menecer profili doldurur + 9 faktoru ballayır, göndərir)──► Göndərilib
+   ──(HR müstəqil ballayır, menecerin ballarını sonra görür, kalibrasiya)──► HR direktorunun təsdiqində
+   ──(HR direktoru / HR meneceri təsdiqləyir)──► Təsdiqlənib
+HR profili natamam görsə ─► Qaytarılıb ─► Menecer düzəldib yenidən göndərir
+HR direktoru şərhlə qaytarsa ─► Qiymətləndirilir (HR yenidən baxır)
 ```
-- Təsdiq avtomatik olaraq vəzifənin departamentinin menecerinə düşür (həmin departamentə təyin olunmuş `manager` rolu).
-- Menecer yalnız öz departamentinin işçilərini görür. HR yekun təsdiq verə bilmir; Admin ehtiyat olaraq birbaşa təsdiqləyə bilər.
-- Kitabxana (departamentlər, vəzifə adları, səviyyələr) Admin tərəfindən redaktə olunur və Firestore-da `departments` kolleksiyasında saxlanılır.
+**Qərəzsizlik tədbirləri:** müstəqil və “kor” qiymətləndirmə; menecer və HR arasında böyük fərq olduqda kalibrasiya qeydi; hər balın konkret tərifi (bal şkalası);
+profildən avtomatik tövsiyə olunan bal (2+ fərq olduqda əsaslandırma mütləqdir); qiymətləndirmə ekranında işçinin adı gizlədilir; maraqlar toqquşması
+(öz vəzifəsini qiymətləndirmək / təsdiqləmək olmaz — “İşçinin e-poçtu” sahəsi ilə yoxlanılır); 4 göz prinsipi (qiymətləndirən təsdiqləyə bilməz);
+oxşar vəzifələrlə müqayisə; qiymətləndirici statistikası (Hesabatlar); tam tarixçə.
+
+## E-poçt bildirişləri (Outlook / Microsoft 365)
+Hər addımda növbəti şəxsin Outlook ünvanına məktub `mail` kolleksiyasına növbəyə yazılır. Göndərmək üçün bir dəfə:
+1. Firebase layihəsini **Blaze** planına keçirin (Console → ⚙ → Usage and billing).
+2. Microsoft 365-də göndərici poçt qutusu seçin (məs. `grading@sizinotel.az`) və IT-dən onun üçün **SMTP AUTH**-u aktiv etməsini xahiş edin.
+3. Firebase Console → **Extensions → “Trigger Email from Firestore”** → Install:
+   - Authentication type: *Username & Password*
+   - SMTP connection URI: `smtp://grading%40sizinotel.az@smtp.office365.com:587`
+   - SMTP password: həmin poçt qutusunun şifrəsi (Secret Manager-də saxlanılır)
+   - Email documents collection: `mail` · Templates collection: `mailTemplates` · Default FROM: `Dərəcələndirmə Sistemi <grading@sizinotel.az>`
+   - Firestore location: `nam5`
+4. Tətbiqdə Admin → İstifadəçilər → **“E-poçt şablonlarını quraşdır”**, və hər istifadəçinin **Outlook e-poçtu** sahəsini doldurun.
+Göndərilmə vəziyyəti Admin səhifəsindəki cədvəldə görünür.
 
 UI düymələri rola görə gizlədilir, əsl qoruma isə `firestore.rules` qaydalarıdır.
 
