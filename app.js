@@ -785,7 +785,7 @@ function exitDemo() {
 // Public address used for sharing and in e-mails. Firebase Hosting is open to everyone
 // (Vercel preview addresses ask visitors to log in to Vercel).
 const PUBLIC_URL = "https://grade-system-new.web.app/";
-const shareLink = () => `${PUBLIC_URL}#/demo`;
+const shareLink = () => PUBLIC_URL;   // opens the first page (sign-in, demo button, video)
 async function copyShareLink() {
   const url = shareLink();
   try { await navigator.clipboard.writeText(url); toast(t("tLinkCopied"), "ok"); }
