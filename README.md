@@ -8,7 +8,7 @@ Otellər üçün vəzifə profili və dərəcələndirmə (G1–G10) veb tətbiq
 - **Dil:** AZ (standart) / EN, işıqlı / qaranlıq rejim, mobil uyğun.
 
 ## Video-tur və demo
-- 4 dəqiqəlik video (ingiliscə səsləndirmə): https://grade-system-new.web.app/media/grading-system-tour.mp4
+- 5 dəqiqəlik video (ingiliscə səsləndirmə): https://grade-system-new.web.app/media/grading-system-tour.mp4
 - Girişsiz demo: https://grade-system-new.web.app/#/demo
 
 ## Quraşdırma (10 addım)
