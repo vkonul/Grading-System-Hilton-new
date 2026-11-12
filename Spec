@@ -1,0 +1,985 @@
+# SPEC.md — Grading System (Vəzifə Dərəcələndirmə Sistemi)
+
+> Build target: a hotel job-grading web app that Claude Code can build in about 45 minutes.
+> Stack: plain HTML + CSS + JavaScript (ES modules), Firebase Auth (Google) + Firestore.
+> No build tools. Deploys to Vercel as a static site.
+
+---
+
+## 1) Purpose and Problem
+
+### Problem
+Hotels have 200+ job titles across 15 departments. Job descriptions are kept in Word files.
+They are often old, they don't match each other, and grading is done by feel. As a result:
+- the same work can get different grades in different departments;
+- HR can't defend grade or pay decisions;
+- managers don't know what information HR needs;
+- there is no single, current report of all positions and grades.
+
+### Purpose
+One simple web app where:
+1. **Department Managers** fill in a structured job profile (sections 1–11) for each position, choosing from a ready library of hospitality job titles.
+2. **HR Evaluators** score each position on **9 factors (1–5)**. The app adds up the scores and recommends a **grade from G1 to G10**. HR then approves the final grade (section 12).
+3. **Admins** manage users and roles, load sample data, and export everything to **Excel (.xlsx)**.
+
+### Success looks like
+- Every position has a complete job profile in the same format.
+- Every grade comes from a visible, repeatable scoring rule.
+- HR can download an up-to-date Excel report in one click.
+- The whole app works in **Azerbaijani (AZ)** and **English (EN)**.
+
+---
+
+## 2) User Roles
+
+| Role (EN / AZ) | Who | Can do | Cannot do |
+|---|---|---|---|
+| **Admin / Administrator** | HR system owner | Everything. Assign roles and departments to users, load sample data, delete records, export all reports | — |
+| **HR Evaluator / HR qiymətləndirici** | HR team | View and edit all positions, score section 12, approve or return a position, export all reports | Manage users, delete records |
+| **Department Manager / Departament meneceri** | Head of a department | Create and edit positions **in their own department only** (sections 1–11), submit them for evaluation, view section 12 read-only, export their department's reports | Edit section 12, approve, see other departments |
+| **Pending / Gözləmədə** | Anyone after their first Google sign-in | Sees a "waiting for role" screen | Everything else |
+
+### Workflow (status)
+
+```
+Draft ──(Manager submits)──► Submitted ──(HR opens & scores)──► Under evaluation
+  ▲                                                                  │
+  └──────────────(HR returns with comment)── Returned ◄──────────────┤
+                                                                     └──(HR approves)──► Approved
+```
+
+| Status key | EN | AZ | Badge colour |
+|---|---|---|---|
+| `draft` | Draft | Qaralama | Grey |
+| `submitted` | Submitted | Göndərilib | Blue #14376F |
+| `under_evaluation` | Under evaluation | Qiymətləndirilir | Teal #1A596A |
+| `returned` | Returned | Qaytarılıb | Amber |
+| `approved` | Approved | Təsdiqlənib | Green |
+
+- A Manager can edit only when the status is `draft` or `returned`.
+- A Manager can set the status only to `draft` or `submitted`.
+- HR and Admin can edit at any status. Once a position is `approved`, the app asks "Edit an approved position?" before allowing changes.
+
+---
+
+## 3) Features (MVP — buildable in about 45 minutes)
+
+### P1 — Must have
+1. **Google sign-in** (Firebase Auth). A new user is created with role `pending`.
+2. **Language switch AZ / EN** in the header. It changes all labels instantly and is saved per user.
+3. **Light / Dark mode switch**. It is saved; the default follows the device setting.
+4. **Dashboard** with stat cards: total positions, a count per status, a bar per grade (G1–G10), and the 5 most recently updated positions.
+5. **Positions list** with:
+   - card and list view toggle;
+   - search by name, title or Position ID;
+   - filters for department, status and grade.
+6. **Job Profile form** with 12 sections shown as collapsible cards (accordion):
+   - Pick a department and job title from the **built-in hospitality job library**. The app then auto-fills the job level, a draft job purpose and 3 starter responsibilities (all editable).
+   - Section 3 lets you **add, remove and edit multiple responsibilities**.
+   - Section 9 shows only if direct reports > 0.
+   - Buttons: **Save draft** and **Submit for evaluation**.
+7. **Evaluation screen** (HR / Admin):
+   - 9 factors, each scored 1–5 by tapping a button;
+   - a live total and a live recommended grade;
+   - a final grade selector, comments, and **Approve** / **Return for changes** buttons.
+8. **Position detail page**: a clean, read-only job description with all sections and a grade badge.
+9. **Excel (.xlsx) export** using SheetJS:
+   - Report A — Grading Summary;
+   - Report B — Full Job Profiles (multi-sheet);
+   - Report C — Single position (from the detail page).
+   - All exports follow the current filters and language.
+10. **Admin → Users**: list of users, with role and department dropdowns.
+11. **Admin → Load sample data**: adds the 5 sample employee records. It is safe to click twice; records are skipped if their `employeeCode` already exists.
+12. **Job Title Library page**: read-only, searchable. It shows the 15 departments, their descriptions, and all titles with their suggested level and grade range.
+
+### P2 — Only if time allows
+- Print-friendly CSS for the detail page (browser "Print → Save as PDF").
+- A warning if the final grade is outside the job level's suggested grade range.
+- "Duplicate position" button.
+
+### Out of scope (not in MVP)
+Email notifications, change history / audit log, multi-hotel support, file attachments, bulk Excel import, salary bands, version comparison.
+
+---
+
+## 4) Screens and Elements of Each Screen
+
+All screens share:
+
+- **Header** (white or surface colour, thin bottom border):
+  - "GS" monogram and app name "Grading System / Dərəcələndirmə Sistemi";
+  - nav links (Dashboard, Positions, Library, Reports, and Admin for admins only);
+  - **AZ | EN** toggle, ☀/☾ theme toggle, and a user avatar menu (name, role, Sign out).
+- **Mobile (<768px)**: the header collapses to a menu button and nav becomes a slide-in drawer. Main actions sit in a sticky bottom action bar.
+
+**Routing**: hash routes, so no server config is needed.
+
+| # | Route | Screen |
+|---|---|---|
+| S1 | `#/login` | Login |
+| S2 | `#/pending` | Waiting for role |
+| S3 | `#/dashboard` | Dashboard |
+| S4 | `#/positions` | Positions list |
+| S5 | `#/positions/new`, `#/positions/:id/edit` | Job Profile form |
+| S6 | `#/positions/:id` | Position detail |
+| S7 | `#/positions/:id/evaluate` | Evaluation (HR/Admin) |
+| S8 | `#/library` | Job Title Library |
+| S9 | `#/reports` | Reports / Excel export |
+| S10 | `#/admin/users` | Users & roles (Admin) |
+
+### S1 — Login
+- A centred card on a white background with the app name in navy #14376F.
+- Tagline: EN "Fair, consistent job grading for hospitality teams" / AZ "Qonaqpərvərlik komandaları üçün ədalətli və vahid vəzifə dərəcələndirməsi".
+- Button: **Sign in with Google / Google ilə daxil ol**.
+- The AZ/EN toggle and theme toggle sit at the top right.
+- Error message area for failed sign-in.
+
+### S2 — Waiting for role
+- A card that says: EN "Your account is waiting for role assignment. Please contact the administrator." / AZ "Hesabınız rol təyinatını gözləyir. Zəhmət olmasa, administratorla əlaqə saxlayın."
+- Buttons: Sign out, Refresh.
+
+### S3 — Dashboard
+- **Stat cards** (4 across on desktop, 2 on tablet, 1 on mobile): Total positions, Submitted, Under evaluation, Approved. Each card shows a big number, a label and a small icon.
+- **Grade distribution card**: horizontal bars for G1–G10, made with plain HTML/CSS (no chart library).
+- **Recently updated card**: 5 list rows. Each row shows name, job title, department, status badge and grade badge, and opens S6 when clicked.
+- **Quick actions**:
+  - "New position" (Manager / HR / Admin);
+  - "Waiting for my evaluation" (HR / Admin — opens S4 filtered to `submitted`).
+- Managers see numbers for their own department only.
+
+### S4 — Positions list
+- Top bar:
+  - search input;
+  - filter dropdowns for Department, Status and Grade;
+  - a view toggle (▦ Cards / ☰ List);
+  - **New position** button;
+  - **Export to Excel** button (Report A with the current filters).
+- **Card view**: each card shows
+  - employee name (bold) and job title;
+  - department, Position ID and job level;
+  - status badge and a grade pill (final grade, or "—");
+  - "Last updated" date.
+  - Clicking a card opens S6.
+- **List view (desktop)**: a table with Name, Job Title, Department, Level, Current Grade, Final Grade, Status and Updated. Clicking a column sorts by it. On mobile the list view falls back to compact cards.
+- **Empty state**: an illustration-free card with the text "No positions yet / Hələ vəzifə yoxdur" and a "New position" button. Admins also get a "Load sample data" button.
+
+### S5 — Job Profile form
+- **Top**:
+  - employee fields: Employee code, Full name, Hire date;
+  - a progress indicator, e.g. "7 / 11 sections complete".
+- **Section cards (accordion)**: sections 1–11, editable by the Manager / HR / Admin, plus section 12 in read-only form showing the scores if any exist. Each card header shows the section number, the bilingual title, and a ✓ when its required fields are filled.
+- **Section 1 smart picker**:
+  1. Choose a Department (15 options).
+  2. Choose a Job Title. The list is filtered by department and is searchable; an "Other (type title)" option is also available.
+  3. On selection:
+     - Job Level is auto-set from the level rules (section 5D below);
+     - Position ID is auto-suggested in the form `POS-{DEPTCODE}-{3 digits}`;
+     - if those fields are still empty, Job Purpose and 3 starter Responsibilities are pre-filled from the level template in the current language.
+  4. A small info line shows "Suggested grade range: G4–G6".
+- **Section 3**: a repeating "Responsibility" sub-card containing all 7 fields, with **+ Add responsibility / + Öhdəlik əlavə et** and a 🗑 remove button. At least 1 responsibility is required.
+- **Field types**: textareas auto-grow; Low/Medium/High fields use segmented buttons (chips); Yes/No fields use toggles.
+- **Sticky action bar**: Cancel · **Save draft / Qaralamanı saxla** · **Submit for evaluation / Qiymətləndirməyə göndər**.
+  - Submit checks the required fields: Job Title, Department, Employee name, Job Purpose (primary purpose), and at least 1 responsibility (task + frequency + level).
+  - If something is missing, the app scrolls to the first missing field and shows a toast.
+- If the status is `returned`, an amber banner at the top shows the HR comment.
+
+### S6 — Position detail
+- **Header card**:
+  - name and job title;
+  - department · level · Position ID;
+  - status badge and a large grade badge.
+- Sections 1–12 shown as read-only cards with label/value pairs (two columns on desktop, one on mobile).
+- Responsibilities are shown as a list of mini-cards with frequency and level chips.
+- **Actions** (shown by role and status): Edit · Evaluate (HR/Admin) · **Export this position (.xlsx)** · Delete (Admin, with a confirm step) · Print (P2).
+
+### S7 — Evaluation (HR / Admin)
+- On the left (on top on mobile): a collapsed summary of the job profile with a "View full profile" link.
+- **9 factor cards**. Each card shows:
+  - the factor name and a one-line description in both languages;
+  - 5 tap buttons, **1 to 5**, labelled Very low / Low / Moderate / High / Very high (Çox aşağı / Aşağı / Orta / Yüksək / Çox yüksək).
+- **Result card** (sticky):
+  - Total score (9–45);
+  - **Recommended grade** (auto);
+  - Suggested range for this job level;
+  - **Final approved grade** selector (G1–G10, defaults to the recommended grade);
+  - Evaluator comments;
+  - Evaluation date (defaults to today) and Evaluator name (auto, from the signed-in user).
+- **Buttons**:
+  - **Save scores** — sets the status to `under_evaluation`;
+  - **Approve / Təsdiqlə** — needs all 9 scores and a final grade; sets the status to `approved` and copies the final grade into `position.currentGrade` and today's date into `position.lastEvaluationDate`;
+  - **Return for changes / Düzəliş üçün qaytar** — needs a comment; sets the status to `returned`.
+- If the final grade differs from the recommended grade, the comments field becomes required. Hint: "Explain why the grade differs / Dərəcənin fərqlənmə səbəbini izah edin".
+
+### S8 — Job Title Library
+- Search box and a department chips filter.
+- One card per department: AZ/EN department name, description, title count, and a list of titles, each with a level chip and a grade range.
+- This page is read-only for everyone in the MVP.
+
+### S9 — Reports
+Three report cards, each with a short description, filters and an **Export .xlsx** button:
+- **A. Grading Summary / Dərəcələndirmə xülasəsi** — filters: department, status, grade.
+- **B. Full Job Profiles / Tam vəzifə profilləri** — filters: department, status.
+- **C. Single position** — opened from S6, so this card only explains that.
+
+Managers only get data from their own department.
+
+### S10 — Admin → Users
+- A list of all users: avatar, name, email, a **Role** dropdown (Admin, HR Evaluator, Department Manager, Pending), a **Department** dropdown (required for Managers), and a last sign-in date.
+- Changes save immediately and a toast confirms "Saved / Yadda saxlanıldı".
+- An Admin cannot change their own role (this prevents locking themselves out).
+- **Load sample data** button, with a confirm step.
+
+### Toasts and dialogs (all screens)
+Saved, Submitted, Approved, Returned, Error, and "Are you sure?" confirmations — all bilingual.
+
+---
+
+## 5) Data Model (fields and sample data)
+
+### 5A) Firestore collections
+
+| Collection | Document ID | Purpose |
+|---|---|---|
+| `users` | Firebase Auth `uid` | Role, department, preferences |
+| `employees` | auto ID | One document = one employee in one position: full job profile (sections 1–11) plus evaluation (section 12) |
+
+The job title library, department list, level templates and translations are **static JS files**, not stored in Firestore. This keeps setup simple.
+
+### 5B) `users/{uid}`
+
+```js
+{
+  uid: "abc123",
+  email: "aysel@hotel.az",
+  displayName: "Aysel Məmmədova",
+  photoURL: "https://...",
+  role: "pending",          // "admin" | "hr" | "manager" | "pending"
+  departmentId: null,       // e.g. "FO" (required when role = "manager")
+  lang: "az",               // "az" | "en"
+  theme: "system",          // "light" | "dark" | "system"
+  createdAt: Timestamp,
+  lastLogin: Timestamp
+}
+```
+
+**First Admin**: sign in once, then open the Firebase Console → Firestore → `users/{your uid}` and set `role` to `"admin"` by hand. Explain this in the README.
+
+### 5C) `employees/{id}` — all fields
+
+**Shared option lists** (stored as keys; labels come from i18n):
+- `freq`: daily | weekly | monthly | occasionally → Daily/Gündəlik, Weekly/Həftəlik, Monthly/Aylıq, Occasionally/Arabir
+- `lmh`: low | medium | high → Low/Aşağı, Medium/Orta, High/Yüksək
+- `yesno`: true | false → Yes/Bəli, No/Xeyr
+- `respLevel`: support | execute | supervise | manage | lead → Support/Dəstək, Execute/İcra, Supervise/Nəzarət, Manage/İdarəetmə, Lead/Rəhbərlik
+- `commLevel`: inform | coordinate | negotiate | influence → Inform/Məlumatlandırma, Coordinate/Koordinasiya, Negotiate/Danışıqlar, Influence/Təsir
+- `employmentType`: full_time | part_time | casual → Full-time/Tam ştat, Part-time/Natamam ştat, Casual/Müvəqqəti
+- `education`: secondary | vocational | bachelor | master | doctorate → Secondary/Orta, Vocational/Peşə, Bachelor/Bakalavr, Master/Magistr, Doctorate/Doktorantura
+- `supervision`: close | general | minimal → Close/Sıx, General/Ümumi, Minimal/Minimal
+- `travel`: none | occasional | frequent → None/Yoxdur, Occasional/Arabir, Frequent/Tez-tez
+- `grade`: G1 … G10
+- `jobLevel`: L1 … L6 (see 5D)
+
+**Top-level fields**
+
+| Key | EN | AZ | Type |
+|---|---|---|---|
+| employeeCode | Employee Code | İşçi kodu | text, required, unique (e.g. EMP-001) |
+| fullName | Full Name | Ad, soyad | text, required |
+| hireDate | Hire Date | İşə qəbul tarixi | date |
+| departmentId | (copy of position.department, used for security rules) | — | text |
+| status | Status | Status | see workflow |
+| returnComment | HR Comment | HR şərhi | text |
+| createdBy / updatedBy | — | — | uid |
+| createdAt / updatedAt | Created / Updated | Yaradılıb / Yenilənib | timestamp |
+
+**Section 1 — `position`** · Position Information / Vəzifə haqqında məlumat
+
+| Key | EN | AZ | Type |
+|---|---|---|---|
+| jobTitle | Job Title | Vəzifənin adı | select from library + free text, required |
+| department | Department | Departament | select (dept code), required |
+| division | Division / Business Unit | Bölmə / Biznes vahidi | text |
+| currentGrade | Current Job Grade | Hazırkı vəzifə dərəcəsi | grade |
+| jobLevel | Job Level | Vəzifə səviyyəsi | jobLevel (auto, editable) |
+| positionId | Position ID | Vəzifə ID-si | text (auto-suggested) |
+| employmentType | Employment Type | Məşğulluq növü | employmentType |
+| location | Location | İş yeri | text |
+| reportsTo | Reporting To (Manager / Position) | Kimə tabedir (rəhbər / vəzifə) | text |
+| directReports | Number of Direct Reports | Birbaşa tabeliyində olanların sayı | number ≥ 0 |
+| indirectReports | Number of Indirect Reports | Dolayı tabeliyində olanların sayı | number ≥ 0 |
+| lastEvaluationDate | Date of Last Job Evaluation | Son qiymətləndirmə tarixi | date |
+
+**Section 2 — `purpose`** · Job Purpose / Vəzifənin məqsədi
+
+| Key | EN | AZ | Type |
+|---|---|---|---|
+| primaryPurpose | Primary purpose of this position | Vəzifənin əsas məqsədi | textarea, required |
+| mainObjectives | Main objectives of the role | Rolun əsas hədəfləri | textarea |
+| departmentContribution | Contribution to department objectives | Departamentin hədəflərinə töhfəsi | textarea |
+| strategyContribution | Contribution to overall business strategy | Ümumi biznes strategiyasına töhfəsi | textarea |
+
+**Section 3 — `responsibilities[]`** · Key Responsibilities & Accountabilities / Əsas öhdəliklər və məsuliyyətlər (array, minimum 1)
+
+| Key | EN | AZ | Type |
+|---|---|---|---|
+| task | Key Responsibility / Task | Əsas öhdəlik / Tapşırıq | text, required |
+| description | Detailed Description | Ətraflı təsvir | textarea |
+| frequency | Frequency | Tezlik | freq, required |
+| level | Level of Responsibility | Məsuliyyət səviyyəsi | respLevel, required |
+| outcomes | Expected Outcomes / Deliverables | Gözlənilən nəticələr | textarea |
+| kpis | Key Performance Indicators (KPIs) | Əsas fəaliyyət göstəriciləri (KPI) | textarea |
+| accountability | Level of Accountability | Hesabatlılıq səviyyəsi | lmh |
+
+**Section 4 — `knowledge`** · Knowledge, Skills & Experience / Bilik, bacarıq və təcrübə
+
+| Key | EN | AZ | Type |
+|---|---|---|---|
+| minEducation | Minimum Educational Qualification | Minimum təhsil tələbi | education |
+| preferredEducation | Preferred Educational Background | Üstünlük verilən təhsil sahəsi | text |
+| experienceYears | Required Professional Experience (Years) | Tələb olunan iş təcrübəsi (il) | number |
+| industryExperience | Required Industry Experience | Sahə üzrə tələb olunan təcrübə | text |
+| technicalKnowledge | Technical / Professional Knowledge | Texniki / peşə bilikləri | textarea |
+| technicalSkills | Required Technical Skills | Tələb olunan texniki bacarıqlar | textarea |
+| softwareSystems | Required Software / Systems Knowledge | Proqram təminatı / sistem bilikləri | text |
+| languages | Language Requirements | Dil tələbləri | text |
+| certifications | Required Certifications / Licenses | Tələb olunan sertifikatlar / lisenziyalar | text |
+| leadershipSkills | Leadership and Management Skills (if applicable) | Liderlik və idarəetmə bacarıqları (tətbiq olunarsa) | textarea |
+
+**Section 5 — `decisions`** · Decision-Making & Autonomy / Qərarvermə və müstəqillik
+
+| Key | EN | AZ | Type |
+|---|---|---|---|
+| independentDecisions | Decisions made independently | Müstəqil qəbul edilən qərarlar | textarea |
+| approvalDecisions | Decisions requiring management approval | Rəhbərliyin təsdiqini tələb edən qərarlar | textarea |
+| authorityLevel | Level of Decision-Making Authority | Qərarvermə səlahiyyətinin səviyyəsi | lmh |
+| budgetaryAuthority | Budgetary Authority | Büdcə səlahiyyəti | text |
+| expenditureApproval | Authority to approve expenditures | Xərcləri təsdiqləmə səlahiyyəti | text (e.g. "Up to 500 AZN") |
+| operationalChanges | Authority to implement operational changes | Əməliyyat dəyişiklikləri etmək səlahiyyəti | lmh |
+| supervisionReceived | Level of Supervision Received | Alınan nəzarətin səviyyəsi | supervision |
+| guidanceFrequency | Frequency of Management Guidance | Rəhbərlik yönləndirməsinin tezliyi | freq |
+
+**Section 6 — `scope`** · Scope of Responsibility & Business Impact / Məsuliyyət sahəsi və biznesə təsir
+
+| Key | EN | AZ | Type |
+|---|---|---|---|
+| employeesSupported | Number of Employees Supported / Managed | Dəstəklənən / idarə olunan işçilərin sayı | number |
+| departmentsSupported | Departments Supported | Dəstəklənən departamentlər | text |
+| operationalImpact | Operational Impact | Əməliyyat təsiri | lmh |
+| financialImpact | Financial Impact | Maliyyə təsiri | lmh |
+| guestSatisfactionImpact | Impact on Guest Satisfaction | Qonaq məmnuniyyətinə təsir | lmh |
+| employeeExperienceImpact | Impact on Employee Experience | İşçi təcrübəsinə təsir | lmh |
+| businessPerformanceImpact | Impact on Business Performance | Biznes nəticələrinə təsir | lmh |
+| assetsResponsibility | Responsibility for Company Assets / Resources | Şirkət aktivləri / resursları üzrə məsuliyyət | lmh |
+| externalInteraction | External Stakeholder Interaction | Xarici tərəflərlə əlaqə | textarea |
+| internalInteraction | Internal Stakeholder Interaction | Daxili tərəflərlə əlaqə | textarea |
+
+**Section 7 — `problemSolving`** · Problem-Solving & Complexity / Problemlərin həlli və mürəkkəblik
+
+| Key | EN | AZ | Type |
+|---|---|---|---|
+| problemNature | Nature of Problems Encountered | Rastlaşılan problemlərin xarakteri | textarea |
+| problemFrequency | Frequency of Problem-Solving Activities | Problem həlli fəaliyyətlərinin tezliyi | freq |
+| complexity | Level of Problem Complexity | Problemlərin mürəkkəblik səviyyəsi | lmh |
+| analyticalThinking | Analytical Thinking Requirements | Analitik düşüncə tələbi | lmh |
+| independentResolution | Requirement for Independent Problem Resolution | Problemlərin müstəqil həlli tələbi | lmh |
+| strategicPlanning | Requirement for Strategic Planning | Strateji planlaşdırma tələbi | lmh |
+| innovation | Level of Innovation and Process Improvement | İnnovasiya və proseslərin təkmilləşdirilməsi səviyyəsi | lmh |
+| errorImpact | Impact of Errors or Incorrect Decisions | Səhv və ya yanlış qərarların təsiri | lmh |
+
+**Section 8 — `communication`** · Communication & Working Relationships / Kommunikasiya və iş əlaqələri
+
+| Key | EN | AZ | Type |
+|---|---|---|---|
+| internalStakeholders | Key Internal Stakeholders | Əsas daxili tərəflər | textarea |
+| externalStakeholders | Key External Stakeholders | Əsas xarici tərəflər | textarea |
+| communicationPurpose | Purpose of Communication | Kommunikasiyanın məqsədi | textarea |
+| communicationLevel | Level of Communication | Kommunikasiya səviyyəsi | commLevel |
+| interactionFrequency | Frequency of Interaction | Qarşılıqlı əlaqənin tezliyi | freq |
+| confidentiality | Confidentiality Requirements | Məxfilik tələbləri | lmh |
+| representation | Representation of the Organization | Təşkilatın təmsil edilməsi | yesno |
+
+**Section 9 — `people`** · People Management & Leadership / Komandanın idarə edilməsi və liderlik
+
+This section shows only when `position.directReports > 0`. Its direct and indirect report counts are read-only copies of the section 1 values.
+
+| Key | EN | AZ | Type |
+|---|---|---|---|
+| recruitment | Recruitment / Selection Responsibilities | İşə qəbul / seçim məsuliyyəti | yesno |
+| performanceManagement | Performance Management Responsibilities | Fəaliyyətin idarə edilməsi | yesno |
+| trainingDevelopment | Training and Development Responsibilities | Təlim və inkişaf | yesno |
+| coaching | Coaching and Mentoring | Kouçinq və mentorluq | yesno |
+| disciplinary | Disciplinary Responsibilities | İntizam məsələləri | yesno |
+| workforcePlanning | Workforce Planning | İşçi qüvvəsinin planlaşdırılması | yesno |
+| teamAccountability | Team Performance Accountability | Komandanın nəticələrinə görə məsuliyyət | yesno |
+
+**Section 10 — `environment`** · Working Environment & Conditions / İş mühiti və şəraiti
+
+| Key | EN | AZ | Type |
+|---|---|---|---|
+| workingSchedule | Working Schedule | İş qrafiki | text |
+| shiftWork | Shift Work Requirements | Növbəli iş tələbi | yesno |
+| physicalRequirements | Physical Requirements | Fiziki tələblər | lmh |
+| mentalDemands | Mental / Emotional Demands | Psixoloji / emosional yük | lmh |
+| healthSafetyRisks | Occupational Health & Safety Risks | Əməyin mühafizəsi və təhlükəsizlik riskləri | lmh |
+| challengingConditions | Exposure to Challenging Working Conditions | Çətin iş şəraitinə məruz qalma | lmh |
+| weekendsHolidays | Work During Weekends / Public Holidays | Həftəsonu / bayram günlərində iş | yesno |
+| travel | Travel Requirements | Ezamiyyət tələbləri | travel |
+
+**Section 11 — `financial`** · Financial & Resource Responsibility / Maliyyə və resurs məsuliyyəti
+
+| Key | EN | AZ | Type |
+|---|---|---|---|
+| budgetResponsibility | Budget Responsibility | Büdcə məsuliyyəti | yesno |
+| budgetSize | Budget Size (AZN, if applicable) | Büdcənin həcmi (AZN, tətbiq olunarsa) | number |
+| financialApprovalLimit | Financial Approval Authority (AZN) | Maliyyə təsdiq səlahiyyəti (AZN) | number |
+| revenueGeneration | Revenue Generation Responsibility | Gəlir yaratma məsuliyyəti | yesno |
+| costControl | Cost Control Responsibility | Xərclərə nəzarət məsuliyyəti | yesno |
+| equipmentAssets | Responsibility for Equipment and Assets | Avadanlıq və aktivlər üzrə məsuliyyət | yesno |
+| inventoryStock | Responsibility for Inventory / Stock | İnventar / anbar üzrə məsuliyyət | yesno |
+
+**Section 12 — `evaluation`** · Job Evaluation & Grading Assessment / Vəzifənin qiymətləndirilməsi və dərəcələndirilməsi (HR / Admin only)
+
+| Key | EN | AZ | Type |
+|---|---|---|---|
+| scores.knowledge | Knowledge & Expertise Score | Bilik və ekspertiza balı | 1–5 |
+| scores.experience | Experience Score | Təcrübə balı | 1–5 |
+| scores.problemSolving | Problem-Solving Score | Problemlərin həlli balı | 1–5 |
+| scores.decisionMaking | Decision-Making Score | Qərarvermə balı | 1–5 |
+| scores.accountability | Accountability Score | Hesabatlılıq balı | 1–5 |
+| scores.businessImpact | Business Impact Score | Biznesə təsir balı | 1–5 |
+| scores.leadership | Leadership Score | Liderlik balı | 1–5 |
+| scores.communication | Communication Score | Kommunikasiya balı | 1–5 |
+| scores.workingConditions | Working Conditions Score | İş şəraiti balı | 1–5 |
+| totalScore | Total Evaluation Score | Ümumi qiymətləndirmə balı | auto, 9–45 |
+| recommendedGrade | Recommended Job Grade | Tövsiyə olunan dərəcə | auto |
+| finalGrade | Final Approved Job Grade | Yekun təsdiqlənmiş dərəcə | grade |
+| comments | Evaluator Comments | Qiymətləndiricinin şərhləri | textarea |
+| approvalStatus | Approval Status | Təsdiq statusu | mirrors `status` |
+| evaluationDate | Evaluation Date | Qiymətləndirmə tarixi | date |
+| evaluatorName / evaluatorUid | Evaluator | Qiymətləndirici | auto |
+
+### 5D) Grading rules (`js/grading.js`)
+
+**Factor descriptions** (shown on S7):
+
+| Key | EN | AZ |
+|---|---|---|
+| knowledge | Education and specialist knowledge needed | Tələb olunan təhsil və ixtisas bilikləri |
+| experience | Years and type of experience needed | Tələb olunan təcrübənin müddəti və növü |
+| problemSolving | How complex and new the problems are | Problemlərin mürəkkəbliyi və yeniliyi |
+| decisionMaking | Freedom to decide without approval | Təsdiqsiz qərar qəbul etmə sərbəstliyi |
+| accountability | Responsibility for results and mistakes | Nəticələrə və səhvlərə görə məsuliyyət |
+| businessImpact | Effect on guests, revenue and costs | Qonaqlara, gəlirə və xərclərə təsir |
+| leadership | Leading, developing and managing people | İnsanlara rəhbərlik, onların inkişafı və idarə edilməsi |
+| communication | Level and importance of contacts | Əlaqələrin səviyyəsi və əhəmiyyəti |
+| workingConditions | Physical, mental and schedule demands | Fiziki, psixoloji yük və iş qrafiki tələbləri |
+
+**Calculation**: `totalScore` = the sum of the 9 scores. All factors have equal weight, so the total runs from 9 to 45. The total maps to a grade like this:
+
+| Total | Grade |
+|---|---|
+| 9–12 | G1 |
+| 13–16 | G2 |
+| 17–20 | G3 |
+| 21–24 | G4 |
+| 25–28 | G5 |
+| 29–32 | G6 |
+| 33–36 | G7 |
+| 37–39 | G8 |
+| 40–42 | G9 |
+| 43–45 | G10 |
+
+```js
+export function recommendGrade(total) {
+  const bands = [[12,"G1"],[16,"G2"],[20,"G3"],[24,"G4"],[28,"G5"],
+                 [32,"G6"],[36,"G7"],[39,"G8"],[42,"G9"],[45,"G10"]];
+  return (bands.find(([max]) => total <= max) || [null, null])[1];
+}
+// Returns null until all 9 scores are present.
+```
+
+**Job levels** (auto-suggested from the job title; only a hint, HR still scores):
+
+| Level | EN | AZ | Suggested grades |
+|---|---|---|---|
+| L1 | Executive | İcraçı rəhbər | G9–G10 |
+| L2 | Department Head | Departament rəhbəri | G8–G9 |
+| L3 | Manager | Menecer | G6–G8 |
+| L4 | Assistant Manager / Supervisor | Köməkçi menecer / Supervayzer | G4–G6 |
+| L5 | Professional / Officer | Mütəxəssis / Əməkdaş | G3–G5 |
+| L6 | Operational / Entry | Əməliyyat / Başlanğıc səviyyə | G1–G3 |
+
+**Level rules** — check in this order; the first match wins:
+1. **Exact overrides**:
+   - L2: Executive Chef, Executive Housekeeper, Financial Controller, Chief Engineer
+   - L3: Executive Sous Chef, Chief Accountant, Chief Steward, Pastry Chef
+   - L5: Demi Chef de Partie
+2. The title contains "Director", "General Manager" or "Hotel Manager" → **L1**.
+3. The title starts with "Assistant " → **L4**.
+4. The title contains "Manager" → **L3**.
+5. The title contains "Supervisor", "Captain", "Sous Chef" or "Chef de Partie" → **L4**.
+6. The title contains Agent, Attendant, Clerk, Commis, Apprentice, Waiter, Host, Bartender, Barista, Steward, Dishwasher, Receptionist, Concierge, Houseperson, Cashier, Storekeeper, Baker, Butcher, Tailor, Lifeguard, Carpenter, Painter, Operator, Server, or ends with "Assistant" → **L6**.
+7. Anything else (Officer, Specialist, Coordinator, Analyst, Executive, Accountant, Auditor, Controller, Administrator, Technician, Therapist, Trainer, Instructor, Electrician, Plumber …) → **L5**.
+
+**Level templates** (pre-fill section 2 and section 3 on title pick). `{dept}` is replaced with the department name in the current language.
+
+- **L1**
+  - Purpose: EN "Leads the {dept} function at hotel level, sets strategy and is accountable for its financial, guest and people results." / AZ "Otel səviyyəsində {dept} funksiyasına rəhbərlik edir, strategiyanı müəyyən edir və onun maliyyə, qonaq və kadr nəticələrinə görə məsuliyyət daşıyır."
+  - Responsibilities:
+    1. Set annual strategy, goals and budget / İllik strategiya, hədəflər və büdcəni müəyyən etmək (monthly, lead)
+    2. Lead and develop department heads / Departament rəhbərlərinə rəhbərlik etmək və onları inkişaf etdirmək (weekly, lead)
+    3. Review results and report to owners and management / Nəticələri təhlil etmək və sahibkarlara və rəhbərliyə hesabat vermək (monthly, lead)
+- **L2**
+  - Purpose: EN "Manages the whole {dept} department, its team, budget and standards, and delivers department targets." / AZ "Bütün {dept} departamentini, onun komandasını, büdcəsini və standartlarını idarə edir, departament hədəflərinə nail olur."
+  - Responsibilities:
+    1. Plan and control department budget and costs / Departament büdcəsini və xərclərini planlaşdırmaq və nəzarət etmək (monthly, manage)
+    2. Hire, train and evaluate the team / Komandanı işə qəbul etmək, öyrətmək və qiymətləndirmək (weekly, manage)
+    3. Set and audit service and quality standards / Xidmət və keyfiyyət standartlarını müəyyən etmək və yoxlamaq (weekly, manage)
+- **L3**
+  - Purpose: EN "Manages a unit within {dept}, plans daily operations and leads the team to meet service and financial targets." / AZ "{dept} daxilində bölməni idarə edir, gündəlik əməliyyatları planlaşdırır və komandanı xidmət və maliyyə hədəflərinə çatmağa yönəldir."
+  - Responsibilities:
+    1. Plan schedules and staffing / İş qrafikini və kadr təminatını planlaşdırmaq (weekly, manage)
+    2. Track KPIs and guest feedback and act on them / KPI-ları və qonaq rəylərini izləmək və tədbir görmək (daily, manage)
+    3. Coach the team and handle escalations / Komandaya kouçinq etmək və mürəkkəb müraciətləri həll etmək (daily, manage)
+- **L4**
+  - Purpose: EN "Supervises daily {dept} operations on the shift and makes sure the team follows procedures and brand standards." / AZ "Növbə ərzində {dept} üzrə gündəlik əməliyyatlara nəzarət edir və komandanın prosedurlara və brend standartlarına əməl etməsini təmin edir."
+  - Responsibilities:
+    1. Brief the shift team and assign tasks / Növbə komandasına brifinq keçmək və tapşırıqları bölüşdürmək (daily, supervise)
+    2. Check quality and fix issues / Keyfiyyəti yoxlamaq və çatışmazlıqları aradan qaldırmaq (daily, supervise)
+    3. Train new staff on the job / Yeni işçiləri iş yerində öyrətmək (weekly, supervise)
+- **L5**
+  - Purpose: EN "Performs specialised {dept} work, such as analysis, coordination or technical tasks, to support the department's goals." / AZ "Departamentin hədəflərini dəstəkləmək üçün {dept} üzrə ixtisaslaşmış işləri — təhlil, koordinasiya və ya texniki tapşırıqları — yerinə yetirir."
+  - Responsibilities:
+    1. Complete assigned specialist tasks accurately / Tapşırılan ixtisas işlərini dəqiq yerinə yetirmək (daily, execute)
+    2. Prepare reports and records / Hesabat və qeydləri hazırlamaq (weekly, execute)
+    3. Coordinate with other departments / Digər departamentlərlə əlaqələndirmə aparmaq (daily, execute)
+- **L6**
+  - Purpose: EN "Delivers day-to-day {dept} service to guests or colleagues, following standard procedures, safety rules and brand standards." / AZ "Standart prosedurlara, təhlükəsizlik qaydalarına və brend standartlarına əməl edərək qonaqlara və ya həmkarlara gündəlik {dept} xidmətini göstərir."
+  - Responsibilities:
+    1. Carry out daily duties to standard / Gündəlik vəzifələri standarta uyğun yerinə yetirmək (daily, execute)
+    2. Respond to guest and colleague requests / Qonaq və həmkarların müraciətlərinə cavab vermək (daily, support)
+    3. Keep the work area clean, safe and stocked / İş sahəsini təmiz, təhlükəsiz və təchiz olunmuş saxlamaq (daily, execute)
+
+### 5E) Hospitality Job Title Library (`js/data/jobTitles.js`)
+
+- Job titles stay in English in both languages, as is standard practice in hotels.
+- Department names and descriptions are bilingual.
+- Some titles appear in more than one department (e.g. Night Auditor, Banquet Manager). Keep them under every department where they are listed.
+
+```js
+export const DEPARTMENTS = [
+ { code:"EXE", en:"Executive Management", az:"İcraçı rəhbərlik",
+   descEn:"Sets hotel strategy, leads all divisions and is accountable for overall financial, guest and team results.",
+   descAz:"Otelin strategiyasını müəyyən edir, bütün bölmələrə rəhbərlik edir və ümumi maliyyə, qonaq və komanda nəticələrinə görə məsuliyyət daşıyır.",
+   titles:["General Manager","Hotel Manager","Director of Operations","Director of Finance","Director of Human Resources","Director of Sales & Marketing","Director of Food & Beverage","Director of Rooms","Director of Engineering","Director of Revenue Management","Director of Security"] },
+ { code:"HR", en:"Human Resources", az:"İnsan resursları",
+   descEn:"Attracts, develops and retains talent; manages employee relations, pay and labour-law compliance.",
+   descAz:"İstedadları cəlb edir, inkişaf etdirir və saxlayır; işçi münasibətlərini, əmək haqqını və əmək qanunvericiliyinə uyğunluğu idarə edir.",
+   titles:["Human Resources Director","Human Resources Manager","Assistant Human Resources Manager","Human Resources Coordinator","Human Resources Officer","Human Resources Administrator","Learning & Development Manager","Learning & Development Coordinator","Training Officer","Recruitment Manager","Recruitment Specialist","Employee Relations Manager","Compensation & Benefits Manager","HR Assistant"] },
+ { code:"FO", en:"Front Office", az:"Qəbul şöbəsi (Front Office)",
+   descEn:"Welcomes guests, manages check-in and check-out, room assignment, guest requests and front-of-house service.",
+   descAz:"Qonaqları qarşılayır, qeydiyyat və çıxış proseslərini, otaqların bölüşdürülməsini, qonaq müraciətlərini və ön xidməti idarə edir.",
+   titles:["Front Office Manager","Assistant Front Office Manager","Front Desk Manager","Front Desk Supervisor","Front Desk Agent","Receptionist","Guest Relations Manager","Guest Relations Officer","Guest Experience Executive","Concierge Manager","Concierge","Bell Captain","Bell Attendant","Door Attendant","Night Manager","Night Auditor","Executive Lounge Manager","Executive Lounge Supervisor","Executive Lounge Agent"] },
+ { code:"HK", en:"Housekeeping", az:"Otaq xidməti (Housekeeping)",
+   descEn:"Keeps guest rooms, public areas, linen and uniforms clean, safe and to brand standard.",
+   descAz:"Qonaq otaqlarının, ictimai sahələrin, yataq dəstlərinin və uniformaların təmiz, təhlükəsiz və brend standartlarına uyğun olmasını təmin edir.",
+   titles:["Executive Housekeeper","Assistant Executive Housekeeper","Housekeeping Manager","Housekeeping Supervisor","Floor Supervisor","Housekeeping Coordinator","Room Attendant","Public Area Attendant","Houseperson","Laundry Manager","Laundry Supervisor","Laundry Attendant","Linen Room Attendant","Uniform Room Attendant","Tailor"] },
+ { code:"FB", en:"Food & Beverage Service", az:"Qida və içki xidməti",
+   descEn:"Delivers restaurant, bar, room service and banquet service that drives guest satisfaction and revenue.",
+   descAz:"Qonaq məmnuniyyətini və gəliri artıran restoran, bar, otağa xidmət və banket xidmətlərini göstərir.",
+   titles:["Director of Food & Beverage","Food & Beverage Manager","Assistant Food & Beverage Manager","Restaurant Manager","Assistant Restaurant Manager","Outlet Manager","Bar Manager","Banquet Manager","Banquet Operations Manager","Banquet Supervisor","Restaurant Supervisor","Bar Supervisor","Host / Hostess","Waiter / Waitress","Food & Beverage Attendant","Bartender","Barista","Room Service Manager","Room Service Supervisor","Room Service Attendant","Mini Bar Attendant"] },
+ { code:"KIT", en:"Kitchen / Culinary", az:"Mətbəx",
+   descEn:"Plans menus and prepares food safely, consistently and within cost targets.",
+   descAz:"Menyuları planlaşdırır, yeməkləri təhlükəsiz, ardıcıl və xərc hədəfləri çərçivəsində hazırlayır.",
+   titles:["Executive Chef","Executive Sous Chef","Sous Chef","Junior Sous Chef","Chef de Partie","Demi Chef de Partie","Commis Chef","Apprentice Chef","Pastry Chef","Pastry Sous Chef","Pastry Chef de Partie","Pastry Commis","Baker","Butcher","Kitchen Supervisor","Kitchen Stewarding Manager","Chief Steward","Stewarding Supervisor","Kitchen Steward","Dishwasher"] },
+ { code:"FIN", en:"Finance & Accounting", az:"Maliyyə və mühasibat",
+   descEn:"Manages accounting, auditing, cost control, payroll, purchasing and financial reporting.",
+   descAz:"Mühasibat uçotunu, auditi, xərclərə nəzarəti, əmək haqqını, satınalmanı və maliyyə hesabatlarını idarə edir.",
+   titles:["Director of Finance","Financial Controller","Assistant Financial Controller","Finance Manager","Chief Accountant","Assistant Chief Accountant","General Accountant","Income Auditor","Night Auditor","Accounts Payable Supervisor","Accounts Payable Officer","Accounts Receivable Officer","Cost Controller","Cost Control Supervisor","Purchasing Manager","Purchasing Supervisor","Purchasing Officer","Storekeeper","Receiving Clerk","Payroll Officer","Cashier"] },
+ { code:"SM", en:"Sales & Marketing", az:"Satış və marketinq",
+   descEn:"Generates room, event and F&B business and builds the hotel's brand and reputation.",
+   descAz:"Otaq, tədbir və qida-içki satışlarını təmin edir, otelin brendini və nüfuzunu formalaşdırır.",
+   titles:["Director of Sales & Marketing","Director of Sales","Sales Manager","Assistant Sales Manager","Senior Sales Manager","Sales Executive","Sales Coordinator","Business Development Manager","Marketing Manager","Marketing Executive","Marketing Coordinator","Digital Marketing Specialist","Social Media Specialist","Public Relations Manager","Communications Manager","E-commerce Manager","Wedding Sales Manager","Events Sales Manager","Corporate Sales Manager","MICE Sales Manager"] },
+ { code:"REV", en:"Revenue Management & Reservations", az:"Gəlirlərin idarə edilməsi və rezervasiya",
+   descEn:"Sets prices and manages room inventory, sales channels and reservations to maximise revenue.",
+   descAz:"Gəliri maksimuma çatdırmaq üçün qiymətləri müəyyən edir, otaq inventarını, satış kanallarını və rezervasiyaları idarə edir.",
+   titles:["Director of Revenue Management","Revenue Manager","Assistant Revenue Manager","Revenue Analyst","Revenue Coordinator","Reservations Manager","Assistant Reservations Manager","Reservations Supervisor","Reservations Agent","Reservations Coordinator","Revenue Optimization Specialist"] },
+ { code:"ENG", en:"Engineering & Maintenance", az:"Mühəndislik və texniki xidmət",
+   descEn:"Maintains building systems, equipment and energy use; ensures safe, comfortable facilities.",
+   descAz:"Bina sistemlərinə, avadanlıqlara və enerji istifadəsinə texniki xidmət göstərir; təhlükəsiz və rahat şəraiti təmin edir.",
+   titles:["Director of Engineering","Chief Engineer","Assistant Chief Engineer","Engineering Manager","Engineering Supervisor","Maintenance Supervisor","Electrician","Plumber","HVAC Technician","Carpenter","Painter","General Maintenance Technician","Refrigeration Technician","Swimming Pool Technician","Engineering Coordinator"] },
+ { code:"SEC", en:"Security", az:"Təhlükəsizlik",
+   descEn:"Protects guests, staff and assets; manages fire and life safety and loss prevention.",
+   descAz:"Qonaqları, işçiləri və aktivləri qoruyur; yanğın və həyat təhlükəsizliyini, itkilərin qarşısının alınmasını idarə edir.",
+   titles:["Director of Security","Security Manager","Assistant Security Manager","Security Supervisor","Security Officer","CCTV Operator","Loss Prevention Officer","Fire & Life Safety Officer","Security Coordinator"] },
+ { code:"SPA", en:"Spa & Recreation", az:"Spa və istirahət",
+   descEn:"Delivers spa treatments, fitness and pool services to brand and hygiene standards.",
+   descAz:"Spa prosedurlarını, fitnes və hovuz xidmətlərini brend və gigiyena standartlarına uyğun göstərir.",
+   titles:["Spa Manager","Assistant Spa Manager","Spa Supervisor","Spa Receptionist","Spa Therapist","Massage Therapist","Beauty Therapist","Fitness Manager","Fitness Instructor","Personal Trainer","Lifeguard","Pool Attendant"] },
+ { code:"IT", en:"Information Technology", az:"İnformasiya texnologiyaları",
+   descEn:"Runs and secures hotel systems, networks and devices and supports users.",
+   descAz:"Otel sistemlərini, şəbəkələri və cihazları idarə edir, onların təhlükəsizliyini təmin edir və istifadəçilərə dəstək göstərir.",
+   titles:["IT Director","IT Manager","IT Supervisor","IT Coordinator","IT Support Specialist","IT Technician","Systems Administrator","Network Administrator","IT Security Specialist"] },
+ { code:"EVT", en:"Events & Banqueting", az:"Tədbirlər və banketlər",
+   descEn:"Plans and delivers conferences, weddings and banquets from contract to event day.",
+   descAz:"Konfransları, toyları və banketləri müqavilədən tədbir gününədək planlaşdırır və həyata keçirir.",
+   titles:["Director of Events","Events Manager","Assistant Events Manager","Event Planning Manager","Event Coordinator","Conference & Events Manager","Banquet Operations Manager","Banquet Supervisor","Banquet Captain","Banquet Server","AV Technician","Event Setup Attendant"] },
+ { code:"PRC", en:"Procurement & Logistics", az:"Satınalma və logistika",
+   descEn:"Buys, receives, stores and issues goods at the right quality, price and time.",
+   descAz:"Malları lazımi keyfiyyətdə, qiymətdə və vaxtda alır, qəbul edir, saxlayır və təhvil verir.",
+   titles:["Procurement Manager","Purchasing Manager","Procurement Officer","Purchasing Officer","Purchasing Coordinator","Logistics Coordinator","Receiving Supervisor","Receiving Clerk","Storekeeper","Inventory Controller"] }
+];
+```
+
+### 5F) Sample data — 5 employee records (`js/data/sampleData.js`)
+
+| Code | Name | Job Title | Dept | Level | Status | Total | Recommended | Final |
+|---|---|---|---|---|---|---|---|---|
+| EMP-001 | Aysel Məmmədova | Front Desk Agent | FO | L6 | approved | 18 | G3 | G3 |
+| EMP-002 | Elvin Quliyev | Housekeeping Supervisor | HK | L4 | submitted | — | — | — |
+| EMP-003 | Nigar Hüseynova | Revenue Manager | REV | L3 | under_evaluation | 32 | G6 | — |
+| EMP-004 | Rəşad Əliyev | Executive Chef | KIT | L2 | approved | 39 | G8 | G8 |
+| EMP-005 | Leyla Həsənova | Human Resources Director | HR | L1 | approved | 41 | G9 | G9 |
+
+**Record 1 — full example** (every other record uses the same shape):
+
+```js
+{
+  employeeCode: "EMP-001", fullName: "Aysel Məmmədova", hireDate: "2023-04-10",
+  departmentId: "FO", status: "approved", returnComment: "",
+  position: { jobTitle: "Front Desk Agent", department: "FO", division: "Rooms Division",
+    currentGrade: "G3", jobLevel: "L6", positionId: "POS-FO-005", employmentType: "full_time",
+    location: "Bakı, Azərbaycan", reportsTo: "Front Desk Supervisor",
+    directReports: 0, indirectReports: 0, lastEvaluationDate: "2026-10-15" },
+  purpose: {
+    primaryPurpose: "Welcomes guests, completes fast and accurate check-in and check-out, and solves guest requests at the front desk to brand standard.",
+    mainObjectives: "Short queue times, accurate billing, high guest satisfaction scores.",
+    departmentContribution: "First and last guest contact; drives Front Office service scores.",
+    strategyContribution: "Supports guest loyalty, upselling and online review ratings." },
+  responsibilities: [
+    { task: "Guest check-in and check-out", description: "Register guests in the PMS, verify ID and payment, issue keys, settle bills.",
+      frequency: "daily", level: "execute", outcomes: "Accurate folios, check-in under 5 minutes",
+      kpis: "Check-in time, billing errors = 0", accountability: "medium" },
+    { task: "Handle guest requests and complaints", description: "Respond to requests and resolve simple complaints; escalate complex cases.",
+      frequency: "daily", level: "execute", outcomes: "Requests closed on the same shift",
+      kpis: "Guest satisfaction score, complaints resolved", accountability: "medium" },
+    { task: "Upsell rooms and services", description: "Offer room upgrades, breakfast and late check-out at check-in.",
+      frequency: "daily", level: "support", outcomes: "Extra room revenue", kpis: "Upsell revenue per month", accountability: "low" } ],
+  knowledge: { minEducation: "secondary", preferredEducation: "Hospitality or tourism diploma",
+    experienceYears: 1, industryExperience: "Hotel front office or guest service",
+    technicalKnowledge: "Check-in and check-out procedures, cash handling, guest privacy rules",
+    technicalSkills: "Fast, accurate data entry; calm complaint handling",
+    softwareSystems: "Opera PMS, MS Office", languages: "Azerbaijani, English (good), Russian (good)",
+    certifications: "—", leadershipSkills: "—" },
+  decisions: { independentDecisions: "Room assignment within category, small goodwill gestures up to 30 AZN",
+    approvalDecisions: "Rate overrides, refunds, upgrades above category",
+    authorityLevel: "low", budgetaryAuthority: "None", expenditureApproval: "Up to 30 AZN goodwill",
+    operationalChanges: "low", supervisionReceived: "close", guidanceFrequency: "daily" },
+  scope: { employeesSupported: 0, departmentsSupported: "Housekeeping, Reservations, F&B",
+    operationalImpact: "medium", financialImpact: "low", guestSatisfactionImpact: "high",
+    employeeExperienceImpact: "low", businessPerformanceImpact: "medium", assetsResponsibility: "low",
+    externalInteraction: "Hotel guests, travel agents, taxi companies",
+    internalInteraction: "Housekeeping, Reservations, Engineering, Security" },
+  problemSolving: { problemNature: "Room not ready, billing questions, guest complaints",
+    problemFrequency: "daily", complexity: "low", analyticalThinking: "low", independentResolution: "medium",
+    strategicPlanning: "low", innovation: "low", errorImpact: "medium" },
+  communication: { internalStakeholders: "Front Desk Supervisor, Housekeeping, Reservations",
+    externalStakeholders: "Guests, travel agents", communicationPurpose: "Inform and serve guests; coordinate room status",
+    communicationLevel: "coordinate", interactionFrequency: "daily", confidentiality: "medium", representation: true },
+  people: { recruitment: false, performanceManagement: false, trainingDevelopment: false, coaching: false,
+    disciplinary: false, workforcePlanning: false, teamAccountability: false },
+  environment: { workingSchedule: "3 shifts, 8 hours, 5 days a week", shiftWork: true,
+    physicalRequirements: "medium", mentalDemands: "medium", healthSafetyRisks: "low",
+    challengingConditions: "low", weekendsHolidays: true, travel: "none" },
+  financial: { budgetResponsibility: false, budgetSize: 0, financialApprovalLimit: 30, revenueGeneration: true,
+    costControl: false, equipmentAssets: true, inventoryStock: false },
+  evaluation: {
+    scores: { knowledge: 2, experience: 2, problemSolving: 2, decisionMaking: 1, accountability: 2,
+              businessImpact: 2, leadership: 1, communication: 3, workingConditions: 3 },
+    totalScore: 18, recommendedGrade: "G3", finalGrade: "G3",
+    comments: "Grade matches entry-level guest-facing role with high guest contact.",
+    approvalStatus: "approved", evaluationDate: "2026-10-15", evaluatorName: "Leyla Həsənova" }
+}
+```
+
+**Records 2–5.** The values below are the key data. For every field not listed:
+- Claude Code fills in realistic hospitality values that fit the role and level, in English;
+- sections 2 and 3 start from the level template and are then made specific, as shown.
+
+```text
+EMP-002 Elvin Quliyev — Housekeeping Supervisor — HK — L4 — POS-HK-004 — full_time
+  reportsTo: Housekeeping Manager · directReports 8 · indirectReports 0 · currentGrade G4
+  hireDate 2021-09-01 · status submitted · evaluation: null (no scores yet)
+  primaryPurpose: Supervises room attendants on the floor so that rooms are cleaned, inspected
+    and released on time to brand standard.
+  responsibilities:
+   1 Inspect cleaned rooms and release them to Front Office (daily, supervise, KPI: rooms inspected/shift, defects <2%)
+   2 Assign room sections and brief the shift team (daily, supervise, KPI: rooms ready by 14:00)
+   3 Train new room attendants and check linen and amenity stock (weekly, supervise, KPI: training hours, stock variance)
+  knowledge: vocational · 3 years · Opera PMS (HK module) · Azerbaijani, basic English
+  people: performanceManagement, trainingDevelopment, coaching = true; others false
+
+EMP-003 Nigar Hüseynova — Revenue Manager — REV — L3 — POS-REV-002 — full_time
+  reportsTo: Director of Revenue Management · directReports 1 · indirectReports 0 · currentGrade G6
+  hireDate 2022-02-14 · status under_evaluation
+  scores: knowledge 4, experience 4, problemSolving 4, decisionMaking 3, accountability 4,
+          businessImpact 4, leadership 3, communication 4, workingConditions 2 → total 32 → G6 (finalGrade empty)
+  primaryPurpose: Sets daily room rates and controls inventory across all channels to maximise
+    room revenue, RevPAR and market share.
+  responsibilities:
+   1 Analyse demand, pick-up and competitor rates; update prices (daily, manage, KPI: RevPAR index)
+   2 Prepare weekly forecast and monthly revenue report (weekly, manage, KPI: forecast accuracy ±5%)
+   3 Manage OTA and channel-manager rates and restrictions (daily, manage, KPI: channel parity, cost of sale)
+  knowledge: bachelor (Finance/Economics/Hospitality) · 4 years · IDeaS or Duetto RMS, Opera, Excel (advanced)
+  financial: revenueGeneration true · financialApprovalLimit 0
+
+EMP-004 Rəşad Əliyev — Executive Chef — KIT — L2 — POS-KIT-001 — full_time
+  reportsTo: Director of Food & Beverage · directReports 4 · indirectReports 38 · currentGrade G8
+  hireDate 2019-06-03 · status approved · evaluationDate 2026-09-30
+  scores: knowledge 4, experience 5, problemSolving 4, decisionMaking 4, accountability 4,
+          businessImpact 5, leadership 5, communication 4, workingConditions 4 → total 39 → G8 · finalGrade G8
+  primaryPurpose: Leads all hotel kitchens, creates menus and delivers safe, high-quality food
+    within food-cost targets.
+  responsibilities:
+   1 Design and cost menus for all outlets and banquets (monthly, lead, KPI: food cost % ≤ 28%)
+   2 Lead, hire and develop the culinary brigade (weekly, lead, KPI: staff turnover, training plan done)
+   3 Ensure food safety and hygiene (HACCP) in all kitchens (daily, manage, KPI: audit score ≥ 90%)
+  knowledge: vocational (culinary) · 10 years · HACCP certificate · Azerbaijani, English
+  financial: budgetResponsibility true · budgetSize 1,800,000 AZN · financialApprovalLimit 5,000 AZN · costControl true · inventoryStock true
+
+EMP-005 Leyla Həsənova — Human Resources Director — HR — L1 — POS-HR-001 — full_time
+  reportsTo: General Manager · directReports 3 · indirectReports 6 · currentGrade G9
+  hireDate 2018-01-15 · status approved · evaluationDate 2026-09-20
+  scores: knowledge 5, experience 5, problemSolving 5, decisionMaking 5, accountability 5,
+          businessImpact 4, leadership 5, communication 5, workingConditions 2 → total 41 → G9 · finalGrade G9
+  primaryPurpose: Leads the people strategy of the hotel — talent, culture, pay and labour-law
+    compliance — to support service quality and business results.
+  responsibilities:
+   1 Set annual HR strategy, headcount plan and HR budget (monthly, lead, KPI: plan approved, budget variance)
+   2 Lead job grading, pay structure and performance reviews (monthly, lead, KPI: 100% roles graded)
+   3 Ensure compliance with the Labour Code of Azerbaijan and handle key employee relations cases (weekly, lead, KPI: zero labour fines)
+  knowledge: master (HR/Business) · 10 years · HRIS, MS Office · Azerbaijani, English, Russian
+  people: all true · financial: budgetResponsibility true · budgetSize 250,000 AZN · financialApprovalLimit 10,000 AZN
+```
+
+### 5G) Excel reports (`js/export.js`, SheetJS)
+
+General rules:
+- Column headers are in the current UI language.
+- Dates are written as YYYY-MM-DD and option keys are turned into labels.
+- Yes/No is written as Yes/No or Bəli/Xeyr.
+- The header row is frozen (`!freeze`) and column widths are set automatically (`!cols`).
+
+| Report | File name | Sheets and columns |
+|---|---|---|
+| **A. Grading Summary** | `grading-summary-YYYY-MM-DD.xlsx` | Sheet "Summary": Employee Code, Full Name, Position ID, Job Title, Department, Job Level, Current Grade, the 9 factor scores, Total Score, Recommended Grade, Final Grade, Status, Evaluation Date, Evaluator |
+| **B. Full Job Profiles** | `job-profiles-YYYY-MM-DD.xlsx` | Sheet "Positions": one row per position with all fields of sections 1, 2 and 4–11, flattened. Sheet "Responsibilities": one row per responsibility (Position ID, Employee Code, + 7 fields). Sheet "Evaluations": section 12 fields |
+| **C. Single position** | `{positionId}-{fullName}.xlsx` | Sheet "Job Description": 3 columns (Section, Field, Value) covering all sections. Sheet "Responsibilities": the 7 fields per responsibility |
+
+---
+
+## 6) Design
+
+### Style direction — Hilton-inspired, calm luxury
+- Mostly white space, quiet navy and teal accents, thin dividers, and small uppercase letter-spaced section labels.
+- Rounded cards (radius 12px) with soft shadows. No heavy gradients.
+- **Do not** use Hilton logos, names or trademarks. The look is "inspired by" only. Use a simple "GS" monogram in a navy rounded square.
+
+### Font
+```css
+/* Hilton Sans is a licensed brand font. If font files are provided, put them in /fonts and load them: */
+@font-face { font-family: "Hilton Sans"; src: url("/fonts/HiltonSans-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Hilton Sans"; src: url("/fonts/HiltonSans-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+/* Fallback: Inter (Google Fonts) — supports Azerbaijani letters ə ğ ı ö ş ü ç */
+--font: "Hilton Sans", "Inter", "Segoe UI", Roboto, Arial, sans-serif;
+```
+If `/fonts` is empty, the app must still look right with Inter.
+
+### Colour tokens
+```css
+:root {                       /* Light (default) */
+  --bg:#FFFFFF; --surface:#FFFFFF; --surface-2:#F5F7FA; --border:#E3E8EF;
+  --text:#1B1F24; --text-muted:#5B6672;
+  --primary:#14376F; --primary-hover:#0F2A55; --on-primary:#FFFFFF;
+  --accent:#1A596A; --accent-soft:#E6F0F2; --primary-soft:#E8EEF7;
+  --link:#14376F; --focus:#4C7BD9;
+  --ok:#1E7B4F; --warn:#B7791F; --danger:#B42318; --neutral:#6B7280;
+  --shadow:0 1px 2px rgba(16,24,40,.06), 0 4px 12px rgba(16,24,40,.06);
+  --radius:12px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { /* same values as below */ } }
+:root[data-theme="dark"] {
+  --bg:#0B1220; --surface:#121B2E; --surface-2:#18233A; --border:#26324A;
+  --text:#EEF2F7; --text-muted:#A6B0BF;
+  --primary:#14376F; --primary-hover:#1C4A93; --on-primary:#FFFFFF;
+  --accent:#1A596A; --accent-soft:#16323A; --primary-soft:#172A4A;
+  --link:#8FB0E6; --focus:#8FB0E6;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 12px rgba(0,0,0,.3);
+}
+body { background: var(--bg); color: var(--text); font-family: var(--font); }
+```
+- Primary buttons: navy #14376F fill with white text.
+- Secondary buttons: teal #1A596A outline.
+- Grade pills: navy background, white text, e.g. "G6".
+- In dark mode, navy text on a dark background is hard to read, so text links use `--link`.
+
+### Layout
+- Max content width 1200px, centred, 24px page padding (16px on mobile).
+- Breakpoints: ≥1024 desktop · 768–1023 tablet · <768 mobile.
+- Card grid: `repeat(auto-fill, minmax(280px, 1fr))`, gap 16px.
+- Touch targets ≥ 44px. Inputs have a visible label above them; there are no placeholder-only fields.
+- Section labels: 12px, uppercase, letter-spacing .08em, colour `--accent`.
+- Headings: H1 28px / H2 20px / body 15px / small 13px.
+- Visible focus ring on everything. Colour contrast meets WCAG AA.
+- Respect `prefers-reduced-motion`. Transitions are short (150ms).
+
+---
+
+## 7) Technology
+
+- **Front end**: plain HTML, CSS and JavaScript ES modules (`<script type="module">`). No frameworks and no build step.
+- **Firebase** (v10 modular SDK, loaded from the CDN):
+  ```html
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  </script>
+  ```
+- **Excel**: SheetJS via a script tag, available as the global `XLSX`:
+  `<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>`
+  Use `XLSX.utils.json_to_sheet`, `XLSX.utils.book_new`, `XLSX.utils.book_append_sheet` and `XLSX.writeFile`.
+- **Hosting**: Vercel, as a static site. With hash routing no `vercel.json` rewrites are needed.
+- **Google sign-in on mobile**: if the popup is blocked, fall back to `signInWithRedirect`.
+- **Avoiding composite indexes**: query `employees` with at most one `where` (departmentId) and sort in the browser.
+- **i18n**: `js/i18n.js` exports `{ az: {...}, en: {...} }`.
+  - Elements use `data-i18n="key"`, and a `t(key)` helper is used inside JS.
+  - The default language is AZ. The choice is saved to `localStorage` and to `users.lang`.
+  - Set `<html lang>` to match.
+- **Theme**: `data-theme` on `<html>`, saved to `localStorage`.
+
+### File structure
+```
+/index.html
+/css/styles.css
+/fonts/                (optional Hilton Sans .woff2)
+/js/config.js          (firebaseConfig placeholders — the user pastes their own)
+/js/firebase.js        (init, auth, db helpers)
+/js/app.js             (router, header, role guard, render screens)
+/js/screens/*.js       (login, dashboard, positions, form, detail, evaluate, library, reports, admin)
+/js/i18n.js
+/js/grading.js         (recommendGrade, suggestLevel, LEVELS, FACTORS)
+/js/export.js          (SheetJS reports A, B, C)
+/js/data/jobTitles.js  (DEPARTMENTS from 5E + LEVEL_TEMPLATES from 5D)
+/js/data/sampleData.js (5 records from 5F)
+/firestore.rules
+/README.md             (setup: Firebase project, enable Google provider, add Vercel domain to
+                        Auth → Authorized domains, paste config, publish rules, make first admin)
+```
+
+### Firestore security rules (`firestore.rules`)
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function signedIn() { return request.auth != null; }
+    function me() { return get(/databases/$(db)/documents/users/$(request.auth.uid)).data; }
+    function isAdmin() { return signedIn() && me().role == "admin"; }
+    function isHR() { return signedIn() && me().role in ["admin", "hr"]; }
+    function isManager() { return signedIn() && me().role == "manager"; }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == uid && request.resource.data.role == "pending";
+      allow update: if isAdmin()
+        || (request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["lang","theme","lastLogin","displayName","photoURL"]));
+      allow delete: if false;
+    }
+
+    match /employees/{id} {
+      allow read: if isHR() || (isManager() && resource.data.departmentId == me().departmentId);
+      allow create: if isHR()
+        || (isManager()
+            && request.resource.data.departmentId == me().departmentId
+            && request.resource.data.get("evaluation", null) == null
+            && request.resource.data.status in ["draft", "submitted"]);
+      allow update: if isHR()
+        || (isManager()
+            && resource.data.departmentId == me().departmentId
+            && request.resource.data.departmentId == me().departmentId
+            && resource.data.status in ["draft", "returned"]
+            && request.resource.data.status in ["draft", "submitted"]
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["evaluation"]));
+      allow delete: if isAdmin();
+    }
+  }
+}
+```
+The UI hides buttons by role, but **the rules are the real protection**.
+
+---
+
+## 8) Acceptance Criteria (testing checklist)
+
+### Sign-in and roles
+- [ ] "Sign in with Google" works on desktop (popup) and mobile (redirect fallback).
+- [ ] A new user gets a `users` document with role `pending` and sees the "waiting for role" screen.
+- [ ] After an Admin sets a role, the user sees the right menu after Refresh.
+- [ ] A Manager sees only positions from their own department, in the list, on the dashboard and in exports.
+- [ ] A Manager cannot open `#/positions/:id/evaluate` (redirected, with a toast) and sees section 12 as read-only.
+- [ ] A direct Firestore write by a Manager to `evaluation`, or to status `approved`, is rejected by the rules.
+- [ ] An Admin cannot change their own role. Only an Admin sees the Admin menu and Delete.
+- [ ] Sign out returns to the Login screen.
+
+### Language (AZ / EN)
+- [ ] Every label, button, menu item, option, status, toast, empty state and Excel header changes when switching AZ ↔ EN, with no page reload.
+- [ ] Azerbaijani letters (ə, ğ, ı, ö, ş, ü, ç) display correctly everywhere, including in the .xlsx file.
+- [ ] The language choice is remembered after reload and on the next sign-in.
+- [ ] Level templates pre-fill text in the current language.
+
+### Design and layout
+- [ ] Light mode has a white background, navy #14376F primary buttons and teal #1A596A accents.
+- [ ] Dark mode is readable; text contrast passes AA. The toggle works and is remembered, and the default follows the device setting.
+- [ ] The font is Hilton Sans if provided, otherwise Inter. Nothing breaks without the font files.
+- [ ] Cards and list views both work. At 375px width nothing scrolls sideways, the table turns into cards, and the action bar is sticky.
+- [ ] All buttons are ≥44px and keyboard focus is visible.
+
+### Job library and form
+- [ ] The library shows all 15 departments and all titles from section 5E, and search works.
+- [ ] Picking "Executive Chef" sets level L2, a suggested range of G8–G9, and pre-fills the purpose and 3 responsibilities.
+- [ ] Level rules: General Manager → L1 · Front Desk Supervisor → L4 · Demi Chef de Partie → L5 · Room Attendant → L6 · Assistant Front Office Manager → L4 · Sales Executive → L5 · HR Assistant → L6.
+- [ ] Position ID is auto-suggested as `POS-{DEPT}-###` and can be edited.
+- [ ] Responsibilities can be added, edited and removed. Submit is blocked with 0 responsibilities.
+- [ ] Section 9 appears only when direct reports > 0.
+- [ ] Save draft stores the record as `draft`. Submit checks the required fields, scrolls to the first missing one, then sets the status to `submitted`.
+- [ ] A Manager cannot edit a `submitted` or `approved` record. A `returned` record shows the HR comment banner and can be edited and resubmitted.
+
+### Evaluation and grading
+- [ ] The total updates live as the 9 scores are tapped. The recommended grade appears only when all 9 are scored.
+- [ ] Mapping checks: all 1s → 9 → G1 · all 5s → 45 → G10 · 18 → G3 · 28 → G5 · 32 → G6 · 36 → G7 · 37 → G8 · 40 → G9 · 42 → G9 · 43 → G10.
+- [ ] Final grade defaults to the recommended grade. If they differ, a comment is required.
+- [ ] Approve sets the status to `approved`, copies the final grade into Current Job Grade, and sets the Last Evaluation Date.
+- [ ] Return requires a comment and sets the status to `returned`.
+- [ ] "Save scores" sets the status to `under_evaluation` without approving.
+
+### Dashboard and list
+- [ ] Stat cards and grade bars match the data. With the sample data: Total 5, Submitted 1, Under evaluation 1, Approved 3; bars at G3 = 1, G8 = 1, G9 = 1.
+- [ ] Search finds "Nigar", "Chef" and "POS-HK". Department, status and grade filters combine correctly.
+- [ ] Clicking a card opens the detail page with all 12 sections.
+
+### Sample data
+- [ ] Admin → "Load sample data" adds exactly 5 records (EMP-001 to EMP-005) with the statuses and grades from 5F.
+- [ ] Clicking it again adds no duplicates.
+
+### Excel export
+- [ ] Report A downloads `grading-summary-YYYY-MM-DD.xlsx`, follows the current filters, and opens in Excel with a frozen header and readable column widths.
+- [ ] Report B has 3 sheets (Positions, Responsibilities, Evaluations); EMP-001 has 3 responsibility rows.
+- [ ] Report C on a detail page downloads one file for that position only.
+- [ ] Headers use the current language, option keys appear as labels (e.g. "Gündəlik", not "daily"), and empty values are blank, not "undefined".
+- [ ] Manager exports contain only their department.
+
+### Deployment
+- [ ] Runs by opening it with any static server (e.g. VS Code Live Server). No npm or build is needed.
+- [ ] Deploys to Vercel as a static site, and Google sign-in works on the Vercel domain after adding it to Firebase authorized domains.
+- [ ] No errors in the browser console during the full test flow.
+- [ ] The README explains Firebase setup, the rules, and how to create the first Admin, in 10 steps or fewer.
