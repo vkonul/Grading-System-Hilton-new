@@ -7,6 +7,10 @@ Otellər üçün vəzifə profili və dərəcələndirmə (G1–G10) veb tətbiq
 - **Excel:** SheetJS (CDN) — A. Dərəcələndirmə xülasəsi, B. Tam vəzifə profilləri, C. Tək vəzifə.
 - **Dil:** AZ (standart) / EN, işıqlı / qaranlıq rejim, mobil uyğun.
 
+## Video-tur və demo
+- 4 dəqiqəlik video (ingiliscə səsləndirmə): https://grade-system-new.web.app/media/grading-system-tour.mp4
+- Girişsiz demo: https://grade-system-new.web.app/#/demo
+
 ## Quraşdırma (10 addım)
 
 1. Firebase Console → `grade-system-new` layihəsini açın (və ya `firebase projects:create grade-system-new`).

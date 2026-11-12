@@ -529,6 +529,7 @@ const STR = {
   jdHas:["Template: custom","Şablon: xüsusi"], jdReqs:["Requirements","Tələblər"], jdReadOnly:["Read-only — you can edit templates of your own department","Yalnız oxumaq üçün — öz departamentinizin şablonlarını redaktə edə bilərsiniz"],
   editAnyStatusInfo:["You can update the job description at any time. Scores and the grade are not changed.","Vəzifə təlimatını istənilən vaxt yeniləyə bilərsiniz. Ballar və dərəcə dəyişmir."],
   changedAfterApproval:["Job description changed after approval — consider re-evaluation","Vəzifə təlimatı təsdiqdən sonra dəyişdirilib — yenidən qiymətləndirməni nəzərdən keçirin"],
+  watchTour:["▶ Watch the 4-minute video tour (English)","▶ 4 dəqiqəlik video-tura bax (ingiliscə)"], videoShort:["▶ Video tour","▶ Video-tur"],
   colSection:["Section","Bölmə"], colField:["Field","Sahə"], colValue:["Value","Dəyər"], general:["General","Ümumi"], no_:["No.","№"]
 };
 const I18N = { az:{}, en:{} };
@@ -1068,6 +1069,7 @@ function renderDemoBar() {
     <label class="demo-role"><span>${t("demoRole")}:</span>
       <select data-demorole="1" aria-label="${t("demoRole")}">${DEMO_USERS.map(([uid, name, r, dep]) => `<option value="${uid}" ${uid === DEMO.uid ? "selected" : ""}>${esc(L(ROLES[r]))}${dep ? " · " + esc(dep) : ""} — ${esc(name)}</option>`).join("")}</select></label>
     <button class="btn btn-ghost" data-act="sharelink">🔗 ${t("shareDemo")}</button>
+    <a class="btn btn-ghost" href="media/grading-system-tour.mp4" target="_blank" rel="noopener">${t("videoShort")}</a>
     <button class="btn btn-ghost" data-act="demoreset">${t("resetDemo")}</button>
     <button class="btn btn-ghost" data-act="signout">${t("exitDemo")}</button></div>`;
 }
@@ -1090,6 +1092,7 @@ function scrLogin() {
     <div class="or-line"><span>${t("or")}</span></div>
     <a class="btn btn-secondary btn-block" href="#/demo">${t("openDemo")}</a>
     <p class="small muted" style="margin-top:8px">${t("demoHint")}</p>
+    <a class="btn btn-ghost btn-block" href="media/grading-system-tour.mp4" target="_blank" rel="noopener" style="margin-top:8px">${t("watchTour")}</a>
     <button class="btn btn-ghost btn-block" data-act="sharelink" style="margin-top:8px">🔗 ${t("shareDemo")}</button>
   </div></div>`;
 }
