@@ -13,7 +13,13 @@
       "Spec",
       "**/.*",
       "**/node_modules/**",
-      "vercel.json"
+      "vercel.json",
+      ".git/**",
+      "**/.git/**",
+      ".firebase/**",
+      "*.log",
+      "**/*.log",
+      ".gitignore"
     ],
     "headers": [
       {
