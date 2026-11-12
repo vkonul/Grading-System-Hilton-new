@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="az">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Dərəcələndirmə Sistemi · Grading System</title>
+  <meta name="description" content="Qonaqpərvərlik komandaları üçün ədalətli və vahid vəzifə dərəcələndirməsi">
+  <meta name="theme-color" content="#14376F">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2314376F'/%3E%3Ctext x='32' y='42' font-family='Arial' font-weight='700' font-size='28' fill='white' text-anchor='middle'%3EGS%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // Apply saved theme before first paint (default follows the device setting)
+    (function () {
+      try { var t = localStorage.getItem("gs.theme"); if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); } catch (e) {}
+      try { var l = localStorage.getItem("gs.lang"); if (l === "en" || l === "az") document.documentElement.lang = l; } catch (e) {}
+    })();
+  </script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main" data-i18n="skipToContent">Məzmuna keç</a>
+  <header class="hdr" id="hdr"></header>
+  <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+  <nav class="drawer" id="drawer" aria-label="Menu" hidden></nav>
+  <main id="main" class="main" tabindex="-1">
+    <div class="loading"><div class="spinner" aria-hidden="true"></div><p data-i18n="loading">Yüklənir…</p></div>
+  </main>
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+  <dialog id="dlg" class="dlg">
+    <form method="dialog">
+      <h2 id="dlgTitle"></h2>
+      <p id="dlgText"></p>
+      <div class="dlg-actions">
+        <button class="btn btn-ghost" value="cancel" id="dlgCancel">Ləğv et</button>
+        <button class="btn btn-primary" value="ok" id="dlgOk">Bəli</button>
+      </div>
+    </form>
+  </dialog>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
