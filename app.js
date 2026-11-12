@@ -358,6 +358,15 @@ const SECTIONS = [
     ["equipmentAssets","Responsibility for Equipment and Assets","Avadanlıq və aktivlər üzrə məsuliyyət","yesno"],
     ["inventoryStock","Responsibility for Inventory / Stock","İnventar / anbar üzrə məsuliyyət","yesno"] ]}
 ];
+// Section 13 — the incumbent's own qualifications (compared with the job requirements in section 4)
+const QUAL = { n:13, key:"qualifications", en:"Employee qualifications", az:"İşçinin ixtisası (fərdi profil)", fields:[
+  ["education","Highest education","Ən yüksək təhsil","opt:education",1],
+  ["fieldOfStudy","Field of study","İxtisas sahəsi","text"],
+  ["experienceYears","Total professional experience (years)","Ümumi iş təcrübəsi (il)","number",1],
+  ["hospitalityYears","Hospitality experience (years)","Qonaqpərvərlik sahəsində təcrübə (il)","number"],
+  ["certificationsHeld","Certifications / licenses held","Mövcud sertifikatlar / lisenziyalar","text"],
+  ["languagesSpoken","Languages spoken","Bildiyi dillər","text"],
+  ["notes","Notes","Qeydlər","textarea"] ]};
 const SEC12 = { n:12, key:"evaluation", en:"Job Evaluation & Grading Assessment", az:"Vəzifənin qiymətləndirilməsi və dərəcələndirilməsi" };
 const EVAL_FIELDS = [
   ...FACTORS.map(f => ["scores." + f.key, f.en + " Score", f.az + " balı", "score"]),
@@ -369,7 +378,7 @@ const EVAL_FIELDS = [
   ["evaluationDate","Evaluation Date","Qiymətləndirmə tarixi","date"],
   ["evaluatorName","Evaluator","Qiymətləndirici","text"]
 ];
-const PERSIST_KEYS = ["employeeCode","fullName","hireDate","employeeEmail","departmentId","status","returnComment","managerEvaluation", ...SECTIONS.map(s => s.key), "evaluation"];
+const PERSIST_KEYS = ["employeeCode","fullName","hireDate","employeeEmail","departmentId","status","returnComment","managerEvaluation","standard","kpiExtra","qualifications", ...SECTIONS.map(s => s.key), "evaluation"];
 
 /* =====================================================================
    5) i18n — { az:{...}, en:{...} }
@@ -530,6 +539,22 @@ const STR = {
   editAnyStatusInfo:["You can update the job description at any time. Scores and the grade are not changed.","Vəzifə təlimatını istənilən vaxt yeniləyə bilərsiniz. Ballar və dərəcə dəyişmir."],
   changedAfterApproval:["Job description changed after approval — consider re-evaluation","Vəzifə təlimatı təsdiqdən sonra dəyişdirilib — yenidən qiymətləndirməni nəzərdən keçirin"],
   watchTour:["▶ Watch the 4-minute video tour (English)","▶ 4 dəqiqəlik video-tura bax (ingiliscə)"], videoShort:["▶ Video tour","▶ Video-tur"],
+  stdTitle:["Fixed job standard","Vəzifənin sabit standartı"], stdInfo:["Defined by HR for this job title. It is the same for every position with this title and cannot be changed here. You can add position-specific KPI targets below each item.","HR tərəfindən bu vəzifə adı üçün müəyyən edilib. Bu adlı bütün vəzifələrdə eynidir və burada dəyişdirilə bilməz. Hər bəndin altına vəzifəyə xas KPI hədəfi əlavə edə bilərsiniz."],
+  stdUpdate:["Update to standard v{v}","Standart v{v}-ə yenilə"], stdUpdated:["A newer job standard exists","Vəzifə standartının yeni versiyası var"], tStdUpdated:["Job standard updated — review and save","Vəzifə standartı yeniləndi — yoxlayıb yadda saxlayın"],
+  kpiExtra:["Position-specific KPI target","Vəzifəyə xas KPI hədəfi"], kpiExtraHint:["Optional — adds to the fixed KPI, does not replace it","İstəyə bağlı — sabit KPI-ı əvəz etmir, ona əlavə olunur"],
+  customResp:["Position-specific responsibilities","Vəzifəyə xas əlavə öhdəliklər"], stdCol:["Fixed standard","Sabit standart"], fixedItem:["Fixed standard (same for every position with this title)","Sabit standart (bu adlı bütün vəzifələrdə eyni)"],
+  jdFixedHint:["Mark the items that form the fixed standard. Positions get them locked; managers can only add their own KPI targets and extra responsibilities.","Sabit standartı təşkil edən bəndləri işarələyin. Vəzifələrdə onlar kilidli olur; menecerlər yalnız öz KPI hədəflərini və əlavə öhdəlikləri əlavə edə bilər."],
+  jdReadOnlyHR:["Read-only — the job standard is maintained by HR","Yalnız oxumaq üçün — vəzifə standartını HR idarə edir"],
+  qualTitle:["Employee qualifications","İşçinin ixtisası (fərdi profil)"], qualSub:["The person's actual education and experience — compared with the job requirements","İşçinin faktiki təhsili və təcrübəsi — vəzifə tələbləri ilə müqayisə olunur"],
+  tNeedQual:["Fill in the employee's education and years of experience","İşçinin təhsilini və iş təcrübəsini (il) doldurun"],
+  fitTitle:["Individual fit & grade","Fərdi uyğunluq və dərəcə"], fit_below:["Below requirements","Tələbdən aşağı"], fit_meets:["Meets requirements","Tələbə uyğun"], fit_exceeds:["Above requirements","Tələbdən yuxarı"], fit_unknown:["Not enough data","Məlumat kifayət deyil"],
+  jobGrade:["Job grade","Vəzifə dərəcəsi"], personalGrade:["Individual grade","Fərdi dərəcə"], required:["Required","Tələb olunan"], actual:["Actual","Faktiki"],
+  fitRule:["Rule: below requirements → one grade lower (development stage) until requirements are met · meets → job grade · above requirements → job grade, upper step (+). The job grade itself never changes.","Qayda: tələbdən aşağı → tələblər ödənənədək bir dərəcə aşağı (inkişaf mərhələsi) · tələbə uyğun → vəzifə dərəcəsi · tələbdən yuxarı → vəzifə dərəcəsi, yuxarı pillə (+). Vəzifə dərəcəsinin özü dəyişmir."],
+  fitEduLow:["Education below the requirement","Təhsil tələbdən aşağıdır"], fitExpLow:["Experience below the requirement","Təcrübə tələbdən azdır"], fitEduHigh:["Education above the requirement","Təhsil tələbdən yuxarıdır"], fitExpHigh:["5+ years more experience than required","Tələbdən 5+ il çox təcrübə"],
+  pgOverride:["HR decision (override)","HR qərarı (dəyişiklik)"], pgAuto:["Automatic (by rule)","Avtomatik (qaydaya görə)"], pgReason:["Reason","Səbəb"], pgSave:["Save individual grade","Fərdi dərəcəni yadda saxla"],
+  tPgSaved:["Individual grade saved","Fərdi dərəcə yadda saxlanıldı"], tNeedReason:["A reason is required for an override","Dəyişiklik üçün səbəb mütləqdir"], h_personal_grade:["Individual grade set","Fərdi dərəcə təyin edildi"],
+  noJobGrade:["The individual grade is calculated after the job grade is approved","Fərdi dərəcə vəzifə dərəcəsi təsdiqləndikdən sonra hesablanır"],
+  preview:["Preview","Önizləmə"], previewBtn:["👁 Preview","👁 Önizlə"], download:["Download .xlsx","Excel-i yüklə"],
   colSection:["Section","Bölmə"], colField:["Field","Sahə"], colValue:["Value","Dəyər"], general:["General","Ümumi"], no_:["No.","№"]
 };
 const I18N = { az:{}, en:{} };
@@ -709,6 +734,14 @@ function demoSeed() {
     db.users[uid] = { uid, email, notifyEmail:email, displayName:name, photoURL:"", role, departmentId:dep, lang:S.lang, theme:S.theme,
       createdAt:new DTS(now - 86400000 * 30), lastLogin:new DTS(now - 3600000 * (i + 1)) };
   });
+  const fdaFixed = [
+    { task:"Guest check-in and check-out to brand standard", description:"Register guests in the PMS, verify ID and payment, issue keys, settle bills.", frequency:"daily", level:"execute", outcomes:"Accurate folios, fast check-in", kpis:"Check-in under 5 minutes; billing errors = 0", accountability:"medium" },
+    { task:"Handle guest requests and complaints", description:"Resolve simple cases on the spot; escalate complex ones to the supervisor.", frequency:"daily", level:"execute", outcomes:"Requests closed on the same shift", kpis:"Guest satisfaction ≥ 90%", accountability:"medium" }];
+  db.jobTemplates = { "FO__front-desk-agent":{ dept:"FO", title:"Front Desk Agent", version:1,
+    primaryPurpose:"Welcomes guests, completes fast and accurate check-in and check-out, and solves guest requests at the front desk to brand standard.",
+    mainObjectives:"Short queue times, accurate billing, high guest satisfaction.",
+    responsibilities:[...fdaFixed.map(r => ({ ...r, fixed:true })), { task:"Upsell rooms and services", description:"Offer upgrades, breakfast and late check-out.", frequency:"daily", level:"support", outcomes:"Extra room revenue", kpis:"Upsell revenue per month", accountability:"low", fixed:false }],
+    fixedItems:fdaFixed, knowledge:{ minEducation:"vocational", experienceYears:1, languages:"Azerbaijani, English", softwareSystems:"Opera PMS" }, updatedByName:"Leyla Həsənova" } };
   db.directory = Object.fromEntries(Object.values(db.users).map(u => [u.uid, { uid:u.uid, displayName:u.displayName, email:u.email, notifyEmail:u.notifyEmail, role:u.role, departmentId:u.departmentId }]));
   db.mail = {};
   sampleRecords().forEach((e, i) => {
@@ -770,10 +803,18 @@ const SAMPLE_EXTRA = {
   "EMP-005":{ managerEvaluation:{ scores:M([5,5,5,5,5,4,5,5,2]), totalScore:41, recommendedGrade:"G9", justifications:{}, comments:"", evaluatorName:"General Manager", date:"2026-09-15" },
     employeeEmail:"leyla.hasanova@hotel-demo.az", finalApproval:{ decision:"approved", comment:"", byName:"General Manager", date:"2026-09-20" } }
 };
+const SAMPLE_QUAL = {
+  "EMP-001":{ education:"bachelor", fieldOfStudy:"Tourism", experienceYears:3, hospitalityYears:3, certificationsHeld:"—", languagesSpoken:"Azerbaijani, English, Russian" },
+  "EMP-002":{ education:"secondary", fieldOfStudy:"—", experienceYears:6, hospitalityYears:6, certificationsHeld:"—", languagesSpoken:"Azerbaijani, Russian" },
+  "EMP-003":{ education:"master", fieldOfStudy:"Finance", experienceYears:5, hospitalityYears:4, certificationsHeld:"Revenue management certificate", languagesSpoken:"Azerbaijani, English, Russian" },
+  "EMP-004":{ education:"vocational", fieldOfStudy:"Culinary arts", experienceYears:16, hospitalityYears:16, certificationsHeld:"HACCP", languagesSpoken:"Azerbaijani, English" },
+  "EMP-005":{ education:"master", fieldOfStudy:"Human Resource Management", experienceYears:12, hospitalityYears:9, certificationsHeld:"CIPD Level 7", languagesSpoken:"Azerbaijani, English, Russian" }
+};
 function sampleRecords() {
   return SAMPLE_DATA.map(r => {
     const e = JSON.parse(JSON.stringify(r)), x = SAMPLE_EXTRA[e.employeeCode] || {};
     if (x.managerEvaluation) e.managerEvaluation = JSON.parse(JSON.stringify(x.managerEvaluation));
+    if (SAMPLE_QUAL[e.employeeCode]) e.qualifications = { ...SAMPLE_QUAL[e.employeeCode], notes:"" };
     if (x.finalApproval) e.finalApproval = { ...x.finalApproval };
     if (x.employeeEmail) e.employeeEmail = x.employeeEmail;
     if (e.evaluation && x.evaluationExtra) Object.assign(e.evaluation, x.evaluationExtra);
@@ -907,6 +948,84 @@ async function signIn() {
 }
 async function doSignOut() { if (DEMO.on) { exitDemo(); return; } await signOut(auth); S.profile = null; S.employees = null; S.users = null; location.hash = "#/login"; }
 
+// Fixed standard items (from the job template) + position-specific responsibilities
+function allResps(e) {
+  const std = (e.standard?.items || []).map((r, i) => ({ ...r, fixed:true, kpisExtra:e.kpiExtra?.[i] || "" }));
+  return [...std, ...(e.responsibilities || [])];
+}
+const EDU_RANK = { secondary:1, vocational:2, bachelor:3, master:4, doctorate:5 };
+// Individual fit: the person's qualifications vs the job requirements (section 4)
+function personalFit(e) {
+  const req = e.knowledge || {}, q = e.qualifications || {};
+  const rEdu = EDU_RANK[req.minEducation], aEdu = EDU_RANK[q.education];
+  const rExp = req.experienceYears === "" || req.experienceYears == null ? null : Number(req.experienceYears);
+  const aExp = q.experienceYears === "" || q.experienceYears == null ? null : Number(q.experienceYears);
+  const reasons = [];
+  if (!aEdu || aExp == null || (!rEdu && rExp == null)) return { state:"unknown", reasons };
+  const eduLow = rEdu && aEdu < rEdu, expLow = rExp != null && aExp < rExp;
+  const eduHigh = rEdu && aEdu > rEdu, expHigh = rExp != null && aExp >= rExp + 5;
+  if (eduLow) reasons.push("fitEduLow"); if (expLow) reasons.push("fitExpLow");
+  if (eduLow || expLow) return { state:"below", reasons };
+  if (eduHigh) reasons.push("fitEduHigh"); if (expHigh) reasons.push("fitExpHigh");
+  return { state:eduHigh || expHigh ? "exceeds" : "meets", reasons };
+}
+const jobGradeOf = e => e.status === "approved" ? (e.evaluation?.finalGrade || e.position?.currentGrade || "") : "";
+function suggestedPersonalGrade(e) {
+  const g = jobGradeOf(e), f = personalFit(e);
+  if (!g || f.state === "unknown") return "";
+  if (f.state === "below") return GRADES[Math.max(0, gradeIdx(g) - 1)];
+  return f.state === "exceeds" ? g + "+" : g;
+}
+const personalGradeOf = e => e.personalGrade?.grade || suggestedPersonalGrade(e);
+function personalFitHTML(e) {
+  const f = personalFit(e), req = e.knowledge || {}, q = e.qualifications || {}, jg = jobGradeOf(e), auto = suggestedPersonalGrade(e), pg = e.personalGrade;
+  const cls = { below:"fit-below", meets:"fit-meets", exceeds:"fit-exceeds", unknown:"" }[f.state];
+  const row = (lbl, r, a) => `<tr><td>${lbl}</td><td>${esc(r || "—")}</td><td>${esc(a || "—")}</td></tr>`;
+  const grades = GRADES.flatMap(g => [g, g + "+"]);
+  return `<section class="card" id="fitCard" style="margin-bottom:16px"><div class="row" style="justify-content:space-between">
+      <div><div class="label-caps">${t("fitTitle")}</div><h2 style="margin:4px 0 0">${t(`fit_${f.state}`)}</h2></div>
+      <div class="row" style="gap:18px"><div style="text-align:center"><div class="small muted">${t("jobGrade")}</div>${pill(jg)}</div>
+        <div style="text-align:center"><div class="small muted">${t("personalGrade")}</div><span class="pill lg ${cls}">${esc(personalGradeOf(e) || "—")}</span></div></div></div>
+    <div class="table-wrap-always" style="margin-top:12px"><table class="tbl cmp"><thead><tr><th></th><th>${t("required")}</th><th>${t("actual")}</th></tr></thead><tbody>
+      ${row(esc(fl(SECTIONS[3].fields[0])), optLabel("education", req.minEducation), optLabel("education", q.education))}
+      ${row(esc(fl(SECTIONS[3].fields[2])), req.experienceYears ?? "", q.experienceYears ?? "")}
+      ${row(esc(fl(SECTIONS[3].fields[8])), req.certifications, q.certificationsHeld)}
+      ${row(esc(fl(SECTIONS[3].fields[7])), req.languages, q.languagesSpoken)}</tbody></table></div>
+    ${f.reasons.length ? `<p class="small" style="margin-top:8px">${f.reasons.map(r => "• " + t(r)).join("<br>")}</p>` : ""}
+    <p class="small muted">${jg ? t("fitRule") : t("noJobGrade")}</p>
+    ${pg?.grade ? `<p class="small"><b>${t("pgOverride")}:</b> ${esc(pg.grade)} — ${esc(pg.reason || "")} <span class="muted">(${esc(pg.byName || "")}, ${esc(pg.date || "")})</span></p>` : ""}
+    ${isHR() && jg ? `<div class="row" style="align-items:flex-end;margin-top:10px">
+      <div class="field" style="flex:0 1 200px"><label for="pgSel">${t("personalGrade")}</label><select id="pgSel"><option value="">${t("pgAuto")}: ${esc(auto || "—")}</option>${grades.map(g => `<option ${pg?.grade === g ? "selected" : ""}>${g}</option>`).join("")}</select></div>
+      <div class="field" style="flex:1 1 240px"><label for="pgReason">${t("pgReason")}</label><input type="text" id="pgReason" value="${esc(pg?.reason || "")}"></div>
+      <button class="btn btn-secondary" data-act="pgsave" data-id="${esc(e.id)}">${t("pgSave")}</button></div>` : ""}
+  </section>`;
+}
+async function savePersonalGrade(id) {
+  const g = $("#pgSel").value, reason = $("#pgReason").value.trim();
+  if (g && !reason) { toast(t("tNeedReason"), "err"); $("#pgReason").focus(); return; }
+  try {
+    await updateDoc(doc(db, "employees", id), { personalGrade:g ? { grade:g, reason, byUid:S.user.uid, byName:S.profile?.displayName || S.user.email || "", date:today() } : null,
+      history:arrayUnion(histEntry("personal_grade", g ? `${g} — ${reason}` : t("pgAuto"))), updatedAt:serverTimestamp(), updatedBy:S.user.uid });
+    S.employees = null; toast(t("tPgSaved"), "ok"); render();
+  } catch (e) { toast(errMsg(e), "err"); }
+}
+// Fixed job standard block inside section 3 of the form
+function standardHTML(d) {
+  const st = d.standard; if (!st?.items?.length) return "";
+  const cur = S.jdt?.[st.templateId], newer = cur && (cur.version || 0) > (st.version || 0) && cur.fixedItems?.length;
+  return `<div class="std-box"><div class="row" style="justify-content:space-between"><span class="label-caps">🔒 ${t("stdTitle")} · v${st.version || 1}</span>
+      ${newer ? `<button type="button" class="btn btn-secondary" data-act="stdupdate">${t("stdUpdate", { v:cur.version })}</button>` : ""}</div>
+    <p class="small muted" style="margin:6px 0 12px">${t("stdInfo")}</p>
+    ${st.items.map((r, i) => `<div class="resp std"><div class="resp-h"><b>${i + 1}. ${esc(r.task)}</b><span class="row">
+        ${r.frequency ? `<span class="chip">${esc(optLabel("freq", r.frequency))}</span>` : ""}${r.level ? `<span class="chip navy">${esc(optLabel("respLevel", r.level))}</span>` : ""}</span></div>
+      ${r.description ? `<p class="small" style="margin:0 0 8px">${esc(r.description)}</p>` : ""}
+      <div class="kv"><div><div class="k">${esc(fl(SECTIONS[2].fields[4]))}</div><div class="v">${esc(r.outcomes || "—")}</div></div>
+        <div><div class="k">🔒 ${esc(fl(SECTIONS[2].fields[5]))}</div><div class="v">${esc(r.kpis || "—")}</div></div></div>
+      <div class="field" style="margin-top:10px"><label for="f-kpiExtra-${i}">${t("kpiExtra")}</label><textarea id="f-kpiExtra-${i}" data-kpiextra="${i}">${esc(d.kpiExtra?.[i] || "")}</textarea>
+        <span class="hint">${t("kpiExtraHint")}</span></div></div>`).join("")}</div>
+    <div class="label-caps" style="margin:16px 0 8px">${t("customResp")}</div>`;
+}
+
 // Job description templates per (department, title) — Firestore `jobTemplates`, editable by HR / Admin and the department's manager
 const JD_REQ_FIELDS = ["minEducation", "experienceYears", "technicalSkills", "softwareSystems", "languages", "certifications"];
 const jdId = (dept, title) => `${dept}__${String(title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
@@ -923,15 +1042,20 @@ function jdFor(dept, title) {
 }
 function applyJd(d, jd, overwrite) {
   let changed = false;
+  const fixed = jd.custom ? (jd.fixedItems || []) : [];
+  if (fixed.length && (overwrite || !d.standard?.items?.length || d.standard.templateId !== jdId(d.position.department, d.position.jobTitle))) {
+    d.standard = { templateId:jdId(d.position.department, d.position.jobTitle), title:d.position.jobTitle, version:jd.version || 1, items:clone(fixed) }; d.kpiExtra = {}; changed = true;
+  } else if (overwrite && !fixed.length) { d.standard = null; d.kpiExtra = {}; }
+  jd = { ...jd, responsibilities:(jd.responsibilities || []).filter(r => !r.fixed).map(({ fixed:_, ...r }) => r) };
   if (overwrite || !(d.purpose.primaryPurpose || "").trim()) { d.purpose.primaryPurpose = jd.primaryPurpose || ""; changed = true; }
   if (jd.mainObjectives && (overwrite || !(d.purpose.mainObjectives || "").trim())) { d.purpose.mainObjectives = jd.mainObjectives; changed = true; }
   const empty = !(d.responsibilities || []).some(r => (r.task || "").trim() || (r.description || "").trim());
-  if ((overwrite || empty) && jd.responsibilities?.length) { d.responsibilities = clone(jd.responsibilities).map(r => ({ ...blankResp(), ...r })); changed = true; }
+  if ((overwrite || empty) && (jd.responsibilities?.length || d.standard?.items?.length)) { d.responsibilities = clone(jd.responsibilities).map(r => ({ ...blankResp(), ...r })); changed = true; }
   d.knowledge = d.knowledge || {};
   JD_REQ_FIELDS.forEach(k => { const v = jd.knowledge?.[k]; if (v !== undefined && v !== "" && v !== null && (overwrite || d.knowledge[k] === undefined || d.knowledge[k] === "" || d.knowledge[k] === null)) { d.knowledge[k] = v; changed = true; } });
   return changed;
 }
-const canEditJd = dept => isHR() || (isMgr() && dept === myDept());
+const canEditJd = () => isHR();   // the job standard is maintained by HR
 async function loadLibrary() {
   try {
     const snap = await getDocs(collection(db, "departments"));
@@ -1277,7 +1401,8 @@ async function scrForm({ id, params, seq }) {
       if (!ok) { location.replace(`#/positions/${id}`); return null; }
     }
     data = pickPersist(e); origStatus = e.status;
-    if (!Array.isArray(data.responsibilities) || !data.responsibilities.length) data.responsibilities = [blankResp()];
+    if (!Array.isArray(data.responsibilities)) data.responsibilities = [];
+    if (!data.responsibilities.length && !data.standard?.items?.length) data.responsibilities = [blankResp()];
     SECTIONS.forEach(s => { if (!s.array && !data[s.key]) data[s.key] = {}; });
   } else if (params.get("dup")) {
     const src = await loadOne(params.get("dup"));
@@ -1301,7 +1426,7 @@ async function scrForm({ id, params, seq }) {
 function sectionComplete(s, d) {
   if (s.n === 1) return !!(d.position?.jobTitle && d.position?.department);
   if (s.n === 2) return !!(d.purpose?.primaryPurpose || "").trim();
-  if (s.n === 3) return (d.responsibilities || []).some(r => (r.task || "").trim() && r.frequency && r.level);
+  if (s.n === 3) return allResps(d).some(r => (r.task || "").trim() && r.frequency && r.level);
   if (s.n === 9 && !(Number(d.position?.directReports) > 0)) return true;
   const obj = d[s.key] || {};
   const filled = s.fields.filter(f => { const v = obj[f[0]]; return v !== undefined && v !== null && v !== ""; }).length;
@@ -1337,7 +1462,7 @@ function fieldHTML(path, def, value, opts = {}) {
 }
 function accHTML(s, body, d, extraTitle = "") {
   const open = S.open.has(s.n);
-  const done = s.n <= 11 ? sectionComplete(s, d) : false;
+  const done = s.n <= 11 ? sectionComplete(s, d) : s.n === 13 ? !!(d.qualifications?.education && d.qualifications?.experienceYears != null && d.qualifications?.experienceYears !== "") : false;
   return `<section class="acc ${open ? "open" : ""}" id="sec-${s.n}">
     <button type="button" class="acc-h" data-acc="${s.n}" aria-expanded="${open}" aria-controls="secb-${s.n}">
       <span class="num">${s.n}</span><span class="tt"><b>${esc(L(s))}</b><span>${esc(S.lang === "en" ? s.az : s.en)}${extraTitle}</span></span>
@@ -1375,10 +1500,10 @@ function section1HTML(d) {
 }
 function respHTML(d) {
   const list = d.responsibilities || [];
-  const fs = SECTIONS[2].fields;
-  return `${list.map((r, i) => `<div class="resp" id="resp-${i}">
+  const fs = SECTIONS[2].fields, hasStd = !!d.standard?.items?.length;
+  return `${standardHTML(d)}${list.map((r, i) => `<div class="resp" id="resp-${i}">
       <div class="resp-h"><span class="label-caps">${t("responsibility")} ${i + 1}</span>
-      <button type="button" class="btn btn-danger" data-delresp="${i}" aria-label="${t("removeResp")} ${i + 1}" ${list.length <= 1 ? "disabled" : ""}>🗑 ${t("removeResp")}</button></div>
+      <button type="button" class="btn btn-danger" data-delresp="${i}" aria-label="${t("removeResp")} ${i + 1}" ${list.length <= 1 && !hasStd ? "disabled" : ""}>🗑 ${t("removeResp")}</button></div>
       <div class="fields">${fs.map(f => fieldHTML(`responsibilities.${i}.${f[0]}`, f, r[f[0]], { full: f[0] === "task" })).join("")}</div></div>`).join("")}
     <button type="button" class="btn btn-secondary" data-act="addresp" style="margin-top:12px">${t("addResp")}</button>`;
 }
@@ -1408,6 +1533,7 @@ function formHTML() {
     ${SECTIONS.map(s => accHTML(s, body(s), d)).join("")}
     ${accHTML(SECMGR, mgrScoringHTML(d), d)}
     ${accHTML(SEC12, d.evaluation?.scores || d.managerEvaluation?.scores ? evaluationSectionHTML({ ...d, id:S.form.id, status:S.form.origStatus, history:[] }) : `<p class="muted">${t("noScores")}</p>`, d)}
+    ${accHTML(QUAL, `<p class="small muted">${t("qualSub")}</p><div class="fields">${QUAL.fields.map(f => fieldHTML(`qualifications.${f[0]}`, f, d.qualifications?.[f[0]])).join("")}</div>`, d)}
   </form>
   <div class="actionbar">
     <button type="button" class="btn btn-ghost" data-act="formcancel">${t("cancel")}</button>
@@ -1435,6 +1561,7 @@ function refreshFormBits() {
   const d = S.form.data;
   const pb = $("#progressBox"); if (pb) pb.innerHTML = progressHTML(d);
   SECTIONS.forEach(s => { const el = $(`[data-ok="${s.n}"]`); if (el) el.textContent = sectionComplete(s, d) ? "✓" : ""; });
+  const q13 = $('[data-ok="13"]'); if (q13) q13.textContent = d.qualifications?.education && d.qualifications?.experienceYears != null && d.qualifications?.experienceYears !== "" ? "✓" : "";
 }
 function rerenderForm() {
   const y = window.scrollY, active = document.activeElement?.id;
@@ -1460,13 +1587,16 @@ function validate(d) {
   if (!(d.position?.jobTitle || "").trim()) miss.push([S.form.other ? "f-otherTitle" : "f-position-jobTitle", 1]);
   if (!(d.purpose?.primaryPurpose || "").trim()) miss.push(["f-purpose-primaryPurpose", 2]);
   const rs = d.responsibilities || [];
-  const okResp = rs.filter(r => (r.task || "").trim() && r.frequency && r.level);
+  const okResp = allResps(d).filter(r => (r.task || "").trim() && r.frequency && r.level);
   if (!okResp.length) {
     const i = Math.max(0, rs.findIndex(r => !((r.task || "").trim() && r.frequency && r.level)));
     const r = rs[i] || {};
     const k = !(r.task || "").trim() ? "task" : !r.frequency ? "frequency" : "level";
     miss.push([rs.length ? fid(`responsibilities.${i}.${k}`) : "sec-3", 3, "resp"]);
   }
+  const q = d.qualifications || {};
+  if (!q.education) miss.push(["f-qualifications-education", 13, "qual"]);
+  else if (q.experienceYears === "" || q.experienceYears == null) miss.push(["f-qualifications-experienceYears", 13, "qual"]);
   const me = d.managerEvaluation || {};
   const missF = FACTORS.find(f => !me.scores?.[f.key]);
   if (missF) miss.push([`fc-mgr-${missF.key}`, "12A", "mgr"]);
@@ -1488,7 +1618,7 @@ async function saveForm(submit) {
       const first = document.getElementById(miss[0][0]);
       first?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block:"center" });
       setTimeout(() => (first?.querySelector?.("button, input, select, textarea") || first)?.focus?.({ preventScroll:true }), 250);
-      toast(miss[0][2] === "resp" && miss.length === 1 ? t("tNeedResp") : miss[0][2] === "mgr" ? t("tNeedMgrScores") : miss[0][2] === "just" ? t("tNeedJust") : t("tMissing"), "err");
+      toast(miss[0][2] === "resp" && miss.length === 1 ? t("tNeedResp") : miss[0][2] === "mgr" ? t("tNeedMgrScores") : miss[0][2] === "just" ? t("tNeedJust") : miss[0][2] === "qual" ? t("tNeedQual") : t("tMissing"), "err");
       return;
     }
   }
@@ -1513,6 +1643,7 @@ async function saveForm(submit) {
       evaluatorUid:S.user.uid, evaluatorName:S.profile?.displayName || S.user.email || "", date:today() });
   }
   const payload = pickPersist(d);
+  payload.responsibilities = (payload.responsibilities || []).filter(r => (r.task || "").trim() || (r.description || "").trim() || (r.kpis || "").trim());
   if (!mgrScoring) delete payload.managerEvaluation;
   if (f.id && f.origStatus === "approved") payload.profileChangedAfterApproval = { at:new Date().toISOString(), byName:S.profile?.displayName || S.user.email || "" };
   payload.updatedBy = S.user.uid; payload.updatedAt = serverTimestamp();
@@ -1569,10 +1700,12 @@ async function scrDetail({ id, seq }) {
     <div><h2 style="margin:0">${esc(title)}</h2><div class="small muted">${esc(sub)}</div></div></div>${body}</section>`;
   const secs = SECTIONS.map(s => {
     let body;
-    if (s.n === 3) body = (e.responsibilities || []).map((r, i) => `<div class="mini"><div class="row" style="justify-content:space-between"><b>${i + 1}. ${esc(r.task)}</b>
+    if (s.n === 3) body = allResps(e).map((r, i) => `<div class="mini ${r.fixed ? "std" : ""}"><div class="row" style="justify-content:space-between"><b>${r.fixed ? "🔒 " : ""}${i + 1}. ${esc(r.task)}</b>
         <span class="row">${r.frequency ? `<span class="chip">${esc(optLabel("freq", r.frequency))}</span>` : ""}${r.level ? `<span class="chip navy">${esc(optLabel("respLevel", r.level))}</span>` : ""}</span></div>
         ${r.description ? `<p style="margin:8px 0 0">${esc(r.description)}</p>` : ""}
-        <div class="kv" style="margin-top:10px">${SECTIONS[2].fields.filter(f => ["outcomes", "kpis", "accountability"].includes(f[0])).map(f => `<div><div class="k">${esc(fl(f))}</div><div class="v">${esc(valueText(f, r[f[0]]) || "—")}</div></div>`).join("")}</div></div>`).join("") || `<p class="muted">—</p>`;
+        <div class="kv" style="margin-top:10px">${SECTIONS[2].fields.filter(f => ["outcomes", "kpis", "accountability"].includes(f[0])).map(f => `<div><div class="k">${esc(fl(f))}</div><div class="v">${esc(valueText(f, r[f[0]]) || "—")}</div></div>`).join("")}
+        ${r.kpisExtra ? `<div class="full"><div class="k">${t("kpiExtra")}</div><div class="v">${esc(r.kpisExtra)}</div></div>` : ""}</div>
+        ${r.fixed ? `<p class="small muted" style="margin:8px 0 0">🔒 ${t("fixedItem")}${e.standard?.version ? " · v" + e.standard.version : ""}</p>` : ""}</div>`).join("") || `<p class="muted">—</p>`;
     else if (s.n === 9 && !showPeople) body = `<p class="muted">${t("notApplicable")}</p>`;
     else if (s.n === 9) body = kvHTML([["directReports","Number of Direct Reports","Birbaşa tabeliyində olanların sayı","number"],["indirectReports","Number of Indirect Reports","Dolayı tabeliyində olanların sayı","number"]], p) + `<div style="height:14px"></div>` + kvHTML(s.fields, e[s.key]);
     else body = kvHTML(s.fields, e[s.key]);
@@ -1593,9 +1726,11 @@ async function scrDetail({ id, seq }) {
     ${e.status === "director_approval" && !canFinalApprove(e) ? `<div class="banner info" style="margin:16px 0 0"><b>⏳ ${t("waitingDirector")}</b>${isDirector() ? `<span class="small">${t(finalApproveBlock(e))}</span>` : ""}</div>` : ""}
   </section>
   ${e.status === "director_approval" && canFinalApprove(e) ? directorPanelHTML(e) : ""}
+  ${personalFitHTML(e)}
   <div class="row no-print" style="margin-bottom:16px" id="detailActions">
     ${edit ? `<a class="btn btn-primary" href="#/positions/${esc(e.id)}/edit">${t("edit")}</a>` : ""}
     ${canHREvaluate() && !isSelf(e) && e.status !== "draft" ? `<a class="btn btn-secondary" href="#/positions/${esc(e.id)}/evaluate">${t("evaluate")}</a>` : ""}
+    <button class="btn btn-ghost" data-act="exportC-pv" data-id="${esc(e.id)}">${t("previewBtn")}</button>
     <button class="btn btn-ghost" data-act="exportC" data-id="${esc(e.id)}">${icon("export")} ${t("exportPos")}</button>
     <a class="btn btn-ghost" href="#/positions/new?dup=${esc(e.id)}">${t("duplicate")}</a>
     <button class="btn btn-ghost" data-act="print">${t("print")}</button>
@@ -1605,6 +1740,7 @@ async function scrDetail({ id, seq }) {
     ${card("·", t("employee"), "", kvHTML(TOP_FIELDS, e))}
     ${secs}
     ${card(12, L(SEC12), t("hrEvalSub"), evaluationSectionHTML(e))}
+    ${card(13, L(QUAL), t("qualSub"), kvHTML(QUAL.fields, e.qualifications))}
     ${card("⏱", t("history"), "", historyHTML(e))}
   </div>`;
 }
@@ -1675,7 +1811,7 @@ function profileHints(e) {
     experience:yrs == null || isNaN(yrs) ? null : yrs < 1 ? 1 : yrs < 3 ? 2 : yrs < 6 ? 3 : yrs < 10 ? 4 : 5,
     problemSolving:to5(avgOf([ps.complexity, ps.analyticalThinking, ps.independentResolution, ps.strategicPlanning, ps.innovation].map(m))),
     decisionMaking:to5(avgOf([m(d.authorityLevel), m(d.operationalChanges), { close:1, general:3, minimal:5 }[d.supervisionReceived] ?? null])),
-    accountability:to5(avgOf([m(ps.errorImpact), avgOf((e.responsibilities || []).map(r => m(r.accountability))), m(sc.assetsResponsibility)])),
+    accountability:to5(avgOf([m(ps.errorImpact), avgOf(allResps(e).map(r => m(r.accountability))), m(sc.assetsResponsibility)])),
     businessImpact:to5(avgOf([sc.operationalImpact, sc.financialImpact, sc.guestSatisfactionImpact, sc.businessPerformanceImpact].map(m))),
     leadership:heads === 0 ? (anyPeople ? 2 : 1) : heads <= 10 ? 3 : heads <= 40 ? 4 : 5,
     communication:to5(avgOf([{ inform:1, coordinate:2, negotiate:4, influence:5 }[c.communicationLevel] ?? null, m(c.confidentiality)])),
@@ -1946,7 +2082,7 @@ function evalHTML() {
       <div class="small muted">${esc(levelName(p.jobLevel))} · ${esc(p.positionId || "")}</div>
       <details style="margin-top:10px"><summary style="cursor:pointer;min-height:44px;display:flex;align-items:center">${esc(L(SECTIONS[1]))}</summary>
         <p class="small">${esc(e.purpose?.primaryPurpose || "—")}</p>
-        <ul class="small" style="padding-left:18px">${(e.responsibilities || []).map(r => `<li>${esc(r.task)}</li>`).join("")}</ul>
+        <ul class="small" style="padding-left:18px">${allResps(e).map(r => `<li>${r.fixed ? "🔒 " : ""}${esc(r.task)}</li>`).join("")}</ul>
         <p class="small muted">${esc(fl(SECTIONS[3].fields[0]))}: ${esc(optLabel("education", e.knowledge?.minEducation) || "—")} · ${esc(e.knowledge?.experienceYears ?? "—")} ${S.lang === "en" ? "yrs" : "il"}</p>
         <p class="small muted">${esc(fl(SECTIONS[0].fields[9]))}: ${esc(p.directReports ?? 0)} · ${esc(fl(SECTIONS[0].fields[10]))}: ${esc(p.indirectReports ?? 0)}</p>
       </details>
@@ -2085,13 +2221,14 @@ function jdHTML() {
   return `<div class="no-print" style="margin-bottom:12px"><a href="#/library" class="small">← ${t("libTitle")}</a></div>
   <div class="page-head"><div><div class="label-caps">${t("jdTemplate")} · ${esc(j.dept)} · ${esc(deptName(j.dept))}</div><h1>${esc(j.title)}</h1>
     <p class="sub"><span class="chip navy">${esc(levelName(lvl))}</span> <span class="chip">${rangeText(lvl)}</span> <span class="chip">${j.custom ? t("jdCustom") : t("jdDefault")}</span></p></div></div>
-  <div class="banner info"><span class="small">${ro ? t("jdReadOnly") : t("jdIntro")}</span></div>
+  <div class="banner info"><span class="small">${ro ? t("jdReadOnlyHR") : t("jdIntro") + " " + t("jdFixedHint")}</span></div>
   <section class="card" style="margin-bottom:16px"><h2>${esc(L(SECTIONS[1]))}</h2><div class="fields">
     ${P.filter(f => ["primaryPurpose", "mainObjectives"].includes(f[0])).map(f => fieldHTML("jd." + f[0], f, d[f[0]], { disabled:ro })).join("")}</div></section>
   <section class="card" style="margin-bottom:16px"><h2>${esc(L(SECTIONS[2]))}</h2>
-    ${d.responsibilities.map((r, i) => `<div class="resp" id="jdresp-${i}"><div class="resp-h"><span class="label-caps">${t("responsibility")} ${i + 1}</span>
+    ${d.responsibilities.map((r, i) => `<div class="resp ${r.fixed ? "std" : ""}" id="jdresp-${i}"><div class="resp-h"><span class="label-caps">${r.fixed ? "🔒 " : ""}${t("responsibility")} ${i + 1}</span>
       ${ro ? "" : `<button type="button" class="btn btn-danger" data-act="jddelresp" data-i="${i}" ${d.responsibilities.length <= 1 ? "disabled" : ""}>🗑 ${t("removeResp")}</button>`}</div>
-      <div class="fields">${R.map(f => fieldHTML(`jd.responsibilities.${i}.${f[0]}`, f, r[f[0]], { disabled:ro, full:f[0] === "task" })).join("")}</div></div>`).join("")}
+      <div class="fields">${fieldHTML(`jd.responsibilities.${i}.fixed`, ["fixed", "Fixed standard (same for every position with this title)", "Sabit standart (bu adlı bütün vəzifələrdə eyni)", "yesno"], r.fixed === true, { disabled:ro, full:true })}
+        ${R.map(f => fieldHTML(`jd.responsibilities.${i}.${f[0]}`, f, r[f[0]], { disabled:ro, full:f[0] === "task" })).join("")}</div></div>`).join("")}
     ${ro ? "" : `<button type="button" class="btn btn-secondary" data-act="jdaddresp" style="margin-top:12px">${t("addResp")}</button>`}</section>
   <section class="card"><h2>${t("jdReqs")}</h2><div class="fields">${K.map(f => fieldHTML("jd.knowledge." + f[0], f, d.knowledge[f[0]], { disabled:ro })).join("")}</div></section>
   ${ro ? "" : `<div class="actionbar">
@@ -2109,8 +2246,12 @@ async function saveJd(reset) {
     }
     const d = j.data;
     const resp = d.responsibilities.filter(r => (r.task || "").trim()).map(r => Object.fromEntries(Object.entries({ ...blankResp(), ...r }).map(([k, v]) => [k, typeof v === "string" ? v.trim() : v])));
+    resp.forEach(r => { r.fixed = r.fixed === true; });
+    const fixedItems = resp.filter(r => r.fixed).map(({ fixed:_, ...r }) => r);
+    const prev = S.jdt?.[j.key];
+    const version = !prev ? 1 : JSON.stringify(prev.fixedItems || []) === JSON.stringify(fixedItems) ? (prev.version || 1) : (prev.version || 1) + 1;
     const knowledge = Object.fromEntries(JD_REQ_FIELDS.filter(k => d.knowledge[k] !== undefined && d.knowledge[k] !== "" && d.knowledge[k] !== null).map(k => [k, d.knowledge[k]]));
-    const data = { dept:j.dept, title:j.title, primaryPurpose:(d.primaryPurpose || "").trim(), mainObjectives:(d.mainObjectives || "").trim(), responsibilities:resp, knowledge,
+    const data = { dept:j.dept, title:j.title, primaryPurpose:(d.primaryPurpose || "").trim(), mainObjectives:(d.mainObjectives || "").trim(), responsibilities:resp, fixedItems, version, knowledge,
       updatedBy:S.user.uid, updatedByName:S.profile?.displayName || "", updatedAt:serverTimestamp() };
     await setDoc(doc(db, "jobTemplates", j.key), data);
     S.jdt[j.key] = data; S.jdEdit = null; toast(t("tJdSaved"), "ok"); location.hash = "#/library";
@@ -2200,12 +2341,12 @@ async function scrReports() {
       <div class="field"><label for="ra-s">${t("status")}</label><select id="ra-s" data-rep="A.status">${statusOptions(a.status)}</select></div>
       <div class="field"><label for="ra-g">${t("grade")}</label><select id="ra-g" data-rep="A.grade">${gradeOptions(a.grade)}</select></div>
       <p class="small muted" id="ra-n">${filterList(S.employees, a).length} ${t("rows")}</p>
-      <button class="btn btn-primary btn-block" data-act="exportA">${icon("export")} ${t("exportXlsx")}</button></section>
+      <div class="row"><button class="btn btn-secondary" data-act="exportA-pv">${t("previewBtn")}</button><button class="btn btn-primary" style="flex:1" data-act="exportA">${icon("export")} ${t("exportXlsx")}</button></div></section>
     <section class="card stack"><div><h2>${t("repB")}</h2><p class="small muted">${t("repBDesc")}</p></div>
       <div class="field"><label for="rb-d">${t("department")}</label><select id="rb-d" data-rep="B.dept">${deptOptions(b.dept)}</select></div>
       <div class="field"><label for="rb-s">${t("status")}</label><select id="rb-s" data-rep="B.status">${statusOptions(b.status)}</select></div>
       <p class="small muted" id="rb-n">${filterList(S.employees, b).length} ${t("rows")}</p>
-      <button class="btn btn-primary btn-block" data-act="exportB">${icon("export")} ${t("exportXlsx")}</button></section>
+      <div class="row"><button class="btn btn-secondary" data-act="exportB-pv">${t("previewBtn")}</button><button class="btn btn-primary" style="flex:1" data-act="exportB">${icon("export")} ${t("exportXlsx")}</button></div></section>
     <section class="card stack"><div><h2>${t("repC")}</h2><p class="small muted">${t("repCDesc")}</p></div>
       <a class="btn btn-secondary btn-block" href="#/positions">${t("goPositions")}</a></section>
   </div>
@@ -2343,14 +2484,32 @@ const TRANSLIT = { "ə":"e","Ə":"E","ş":"s","Ş":"S","ç":"c","Ç":"C","ğ":"g
 function sanitizeFile(s) { return String(s || "").replace(/[əƏşŞçÇğĞıİöÖüÜ]/g, c => TRANSLIT[c]).normalize("NFKD").replace(/[^\x20-\x7E]/g, "").replace(/[\\/:*?"<>|]+/g, "").trim() || "position"; }
 const H = (en, az) => S.lang === "en" ? en : az;
 
-function exportA(filters) {
+function finishExport(wb, name, preview) {
+  if (!preview) { XLSX.writeFile(wb, name); toast(t("tExported"), "ok"); return; }
+  $("#pv")?.remove();
+  const ov = document.createElement("div"); ov.className = "pv"; ov.id = "pv";
+  ov.innerHTML = `<div class="pv-box" role="dialog" aria-modal="true" aria-label="${esc(name)}">
+    <div class="pv-h"><div style="min-width:0"><div class="label-caps">${t("preview")}</div><b class="pv-name">${esc(name)}</b></div>
+      <div class="row"><button class="btn btn-primary" data-act="pvdl">⤓ ${t("download")}</button><button class="btn btn-ghost" data-act="pvclose">${t("close")}</button></div></div>
+    <div class="pv-tabs" role="tablist">${wb.SheetNames.map((n, i) => `<button role="tab" data-pvtab="${i}" aria-pressed="${i === 0}">${esc(n)}</button>`).join("")}</div>
+    <div class="pv-body" id="pvBody"></div></div>`;
+  document.body.appendChild(ov); S.pv = { wb, name }; pvShow(0); ov.querySelector("[data-act=pvdl]").focus();
+}
+function pvShow(i) {
+  if (!S.pv) return;
+  const ws = S.pv.wb.Sheets[S.pv.wb.SheetNames[i]];
+  $("#pvBody").innerHTML = XLSX.utils.sheet_to_html(ws, { header:"", footer:"" });
+  $("#pvBody table")?.classList.add("pv-table");
+  $$("[data-pvtab]").forEach(b => b.setAttribute("aria-pressed", String(Number(b.dataset.pvtab) === i)));
+}
+function exportA(filters, preview) {
   if (!xlsxReady()) return;
   const list = sortByUpdated(filterList(scopeList(S.employees || []), filters));
   const c = { code:fl(TOP_FIELDS[0]), name:fl(TOP_FIELDS[1]), pid:fl(SECTIONS[0].fields[5]), title:fl(SECTIONS[0].fields[1]), dept:fl(SECTIONS[0].fields[0]),
     level:fl(SECTIONS[0].fields[4]), cur:fl(SECTIONS[0].fields[3]), total:H("Total Score","Ümumi bal"), rec:H("Recommended Grade","Tövsiyə olunan dərəcə"),
     fin:H("Final Grade","Yekun dərəcə"), st:t("status"), date:H("Evaluation Date","Qiymətləndirmə tarixi"), ev:H("Evaluator","Qiymətləndirici") };
   const fh = FACTORS.map(f => L(f));
-  const headers = [c.code, c.name, c.pid, c.title, c.dept, c.level, c.cur, ...fh, H("Manager Total","Menecer cəmi"), c.total, H("Gap (HR − Manager)","Fərq (HR − Menecer)"), H("Calibration flag","Kalibrasiya"), c.rec, c.fin, c.st, c.date, c.ev];
+  const headers = [c.code, c.name, c.pid, c.title, c.dept, c.level, c.cur, ...fh, H("Manager Total","Menecer cəmi"), c.total, H("Gap (HR − Manager)","Fərq (HR − Menecer)"), H("Calibration flag","Kalibrasiya"), c.rec, c.fin, t("fitTitle"), t("personalGrade"), c.st, c.date, c.ev];
   const rows = list.map(e => {
     const ev = e.evaluation || {}, p = e.position || {};
     const r = { [c.code]:e.employeeCode || "", [c.name]:e.fullName || "", [c.pid]:p.positionId || "", [c.title]:p.jobTitle || "", [c.dept]:deptName(e.departmentId),
@@ -2361,14 +2520,14 @@ function exportA(filters) {
     r[H("Manager Total","Menecer cəmi")] = ms && scoreTotal(ms).complete ? scoreTotal(ms).total : "";
     r[H("Gap (HR − Manager)","Fərq (HR − Menecer)")] = cal ? cal.totalGap : "";
     r[H("Calibration flag","Kalibrasiya")] = cal ? (cal.flagged ? H("Yes","Bəli") : H("No","Xeyr")) : "";
+    const pf = personalFit(e); r[t("fitTitle")] = pf.state === "unknown" ? "" : t("fit_" + pf.state); r[t("personalGrade")] = personalGradeOf(e) || "";
     Object.assign(r, { [c.total]:ev.scores ? (ev.totalScore ?? st.total) : "", [c.rec]:ev.recommendedGrade || "", [c.fin]:ev.finalGrade || "", [c.st]:statusLabel(e.status),
       [c.date]:ev.evaluationDate || "", [c.ev]:ev.evaluatorName || "" });
     return r;
   });
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, makeSheet(rows, headers), t("sheetSummary"));
-  XLSX.writeFile(wb, `grading-summary-${stamp()}.xlsx`);
-  toast(t("tExported"), "ok");
+  finishExport(wb, `grading-summary-${stamp()}.xlsx`, preview);
 }
 function positionRow(e) {
   const used = new Set(), r = {}, headers = [];
@@ -2376,18 +2535,21 @@ function positionRow(e) {
   TOP_FIELDS.forEach(f => put(fl(f), xv(f, e[f[0]])));
   put(t("status"), statusLabel(e.status));
   SECTIONS.filter(s => s.n !== 3).forEach(s => s.fields.forEach(f => put(fl(f), xv(f, e[s.key]?.[f[0]]))));
+  QUAL.fields.forEach(f => put(`${t("actual")}: ${fl(f)}`, xv(f, e.qualifications?.[f[0]])));
+  put(t("personalGrade"), personalGradeOf(e) || "");
   put(H("HR Comment","HR şərhi"), e.returnComment || "");
   put(H("Updated","Yenilənib"), fmtDate(e.updatedAt));
   return { r, headers };
 }
 function respRows(e) {
-  return (e.responsibilities || []).map((x, i) => {
-    const o = { [fl(SECTIONS[0].fields[5])]:e.position?.positionId || "", [fl(TOP_FIELDS[0])]:e.employeeCode || "", [t("no_")]:i + 1 };
+  return allResps(e).map((x, i) => {
+    const o = { [fl(SECTIONS[0].fields[5])]:e.position?.positionId || "", [fl(TOP_FIELDS[0])]:e.employeeCode || "", [t("no_")]:i + 1, [t("stdCol")]:x.fixed ? t("yes") : t("no") };
     SECTIONS[2].fields.forEach(f => o[fl(f)] = xv(f, x[f[0]]));
+    o[t("kpiExtra")] = x.kpisExtra || "";
     return o;
   });
 }
-const respHeaders = () => [fl(SECTIONS[0].fields[5]), fl(TOP_FIELDS[0]), t("no_"), ...SECTIONS[2].fields.map(fl)];
+const respHeaders = () => [fl(SECTIONS[0].fields[5]), fl(TOP_FIELDS[0]), t("no_"), t("stdCol"), ...SECTIONS[2].fields.map(fl), t("kpiExtra")];
 function evalRow(e) {
   const ev = e.evaluation || {};
   const o = { [fl(SECTIONS[0].fields[5])]:e.position?.positionId || "", [fl(TOP_FIELDS[0])]:e.employeeCode || "", [fl(TOP_FIELDS[1])]:e.fullName || "" };
@@ -2400,7 +2562,7 @@ function evalRow(e) {
   return o;
 }
 const evalHeaders = () => [fl(SECTIONS[0].fields[5]), fl(TOP_FIELDS[0]), fl(TOP_FIELDS[1]), ...EVAL_FIELDS.map(fl), ...FACTORS.map(f => `${t("mgrScore")}: ${L(f)}`), t("mgrEvaluation"), `${t("mgrScore")} — ${t("evaluator")}`, t("calibration"), t("calNote"), t("finalDecision"), t("finalApproval"), t("mgrDate"), t("dirComment")];
-function exportB(filters) {
+function exportB(filters, preview) {
   if (!xlsxReady()) return;
   const list = sortByUpdated(filterList(scopeList(S.employees || []), filters));
   const pos = list.map(positionRow);
@@ -2409,10 +2571,9 @@ function exportB(filters) {
   XLSX.utils.book_append_sheet(wb, makeSheet(pos.map(x => x.r), headers), t("sheetPositions"));
   XLSX.utils.book_append_sheet(wb, makeSheet(list.flatMap(respRows), respHeaders()), t("sheetResp"));
   XLSX.utils.book_append_sheet(wb, makeSheet(list.map(evalRow), evalHeaders()), t("sheetEval"));
-  XLSX.writeFile(wb, `job-profiles-${stamp()}.xlsx`);
-  toast(t("tExported"), "ok");
+  finishExport(wb, `job-profiles-${stamp()}.xlsx`, preview);
 }
-async function exportC(id) {
+async function exportC(id, preview) {
   if (!xlsxReady()) return;
   const e = await loadOne(id); if (!e) return;
   const [cs, cf, cv] = [t("colSection"), t("colField"), t("colValue")];
@@ -2423,10 +2584,12 @@ async function exportC(id) {
   if (e.returnComment) add(t("general"), t("hrComment"), e.returnComment);
   SECTIONS.forEach(s => {
     const sec = `${s.n}. ${L(s)}`;
-    if (s.n === 3) { (e.responsibilities || []).forEach((r, i) => add(sec, `${t("responsibility")} ${i + 1}`, `${r.task || ""} (${optLabel("freq", r.frequency)}, ${optLabel("respLevel", r.level)})`)); return; }
+    if (s.n === 3) { allResps(e).forEach((r, i) => add(sec, `${r.fixed ? "🔒 " : ""}${t("responsibility")} ${i + 1}`, `${r.task || ""} (${optLabel("freq", r.frequency)}, ${optLabel("respLevel", r.level)})`)); return; }
     if (s.n === 9 && !(Number(e.position?.directReports) > 0)) { add(sec, "—", t("notApplicable")); return; }
     s.fields.forEach(f => add(sec, fl(f), xv(f, e[s.key]?.[f[0]])));
   });
+  QUAL.fields.forEach(f => add(`13. ${L(QUAL)}`, fl(f), xv(f, e.qualifications?.[f[0]])));
+  { const pf = personalFit(e); add(`13. ${L(QUAL)}`, t("fitTitle"), pf.state === "unknown" ? "" : t("fit_" + pf.state)); add(`13. ${L(QUAL)}`, t("personalGrade"), personalGradeOf(e)); }
   const sec12 = `12. ${L(SEC12)}`;
   EVAL_FIELDS.forEach(f => { const v = getP(e.evaluation || {}, f[0]); add(sec12, fl(f), f[3] === "status" ? (e.evaluation ? statusLabel(e.status) : "") : v); });
   const me = e.managerEvaluation || {}, fa = e.finalApproval || {};
@@ -2437,20 +2600,19 @@ async function exportC(id) {
   if (fa.decision) { add(sec12, t("finalDecision"), t("dec_" + fa.decision)); add(sec12, t("finalApproval"), fa.byName); add(sec12, t("mgrDate"), fa.date); add(sec12, t("dirComment"), fa.comment); }
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, makeSheet(rows, [cs, cf, cv]), t("sheetJD"));
-  const rh = [t("no_"), ...SECTIONS[2].fields.map(fl)];
-  XLSX.utils.book_append_sheet(wb, makeSheet((e.responsibilities || []).map((r, i) => {
-    const o = { [t("no_")]:i + 1 }; SECTIONS[2].fields.forEach(f => o[fl(f)] = xv(f, r[f[0]])); return o; }), rh), t("sheetResp"));
+  const rh = [t("no_"), t("stdCol"), ...SECTIONS[2].fields.map(fl), t("kpiExtra")];
+  XLSX.utils.book_append_sheet(wb, makeSheet(allResps(e).map((r, i) => {
+    const o = { [t("no_")]:i + 1, [t("stdCol")]:r.fixed ? t("yes") : t("no") }; SECTIONS[2].fields.forEach(f => o[fl(f)] = xv(f, r[f[0]])); o[t("kpiExtra")] = r.kpisExtra || ""; return o; }), rh), t("sheetResp"));
   const hh = [t("mailDate"), t("history"), t("evaluator"), t("dirComment")];
   XLSX.utils.book_append_sheet(wb, makeSheet((e.history || []).map(x => ({ [hh[0]]:String(x.at || "").replace("T", " ").slice(0, 16), [hh[1]]:t("h_" + x.action), [hh[2]]:x.byName || "", [hh[3]]:x.note || "" })), hh), t("history"));
-  XLSX.writeFile(wb, `${sanitizeFile(e.position?.positionId)}-${sanitizeFile(e.fullName)}.xlsx`);
-  toast(t("tExported"), "ok");
+  finishExport(wb, `${sanitizeFile(e.position?.positionId)}-${sanitizeFile(e.fullName)}.xlsx`, preview);
 }
 
 /* =====================================================================
    12) Global event delegation
    ===================================================================== */
 document.addEventListener("click", async ev => {
-  const el = ev.target.closest("[data-act],[data-go],[data-chip],[data-acc],[data-delresp],[data-score],[data-sort],[data-libdept]");
+  const el = ev.target.closest("[data-act],[data-go],[data-chip],[data-acc],[data-delresp],[data-score],[data-sort],[data-libdept],[data-pvtab]");
   if (!ev.target.closest(".user-menu")) $("#userPop")?.setAttribute("hidden", "");
   if (!el) return;
   if (el.dataset.go) { location.hash = el.dataset.go; return; }
@@ -2488,6 +2650,7 @@ document.addEventListener("click", async ev => {
     return;
   }
   if (el.dataset.sort) { const k = el.dataset.sort; S.sort = { key:k, dir:S.sort.key === k ? -S.sort.dir : 1 }; renderPosResults(); return; }
+  if (el.dataset.pvtab !== undefined) { pvShow(Number(el.dataset.pvtab)); return; }
   if (el.dataset.libdept !== undefined) { S.libDept = el.dataset.libdept; $$("[data-libdept]").forEach(b => b.setAttribute("aria-pressed", b.dataset.libdept === S.libDept)); renderLib(); return; }
   const act = el.dataset.act;
   switch (act) {
@@ -2542,6 +2705,17 @@ document.addEventListener("click", async ev => {
     case "dirreturn": directorDecide(el.dataset.id, "returned"); break;
     case "mailtpl": installMailTemplates(); break;
     case "jdsave": saveJd(false); break;
+    case "pgsave": savePersonalGrade(el.dataset.id); break;
+    case "stdupdate": {
+      const d = S.form.data, cur = S.jdt?.[d.standard.templateId];
+      if (cur) { d.standard = { ...d.standard, version:cur.version || 1, items:clone(cur.fixedItems || []) }; d.kpiExtra = {}; S.dirty = true; rerenderForm(); toast(t("tStdUpdated"), "ok"); }
+      break;
+    }
+    case "exportA-pv": exportA(S.repA, true); break;
+    case "exportB-pv": exportB(S.repB, true); break;
+    case "exportC-pv": exportC(el.dataset.id, true); break;
+    case "pvclose": $("#pv")?.remove(); S.pv = null; break;
+    case "pvdl": if (S.pv) { XLSX.writeFile(S.pv.wb, S.pv.name); toast(t("tExported"), "ok"); } break;
     case "jdreset": saveJd(true); break;
     case "jdaddresp": S.jdEdit.data.responsibilities.push(blankResp()); rerenderJd(); break;
     case "jddelresp": S.jdEdit.data.responsibilities.splice(Number(el.dataset.i), 1); rerenderJd(); break;
@@ -2556,7 +2730,7 @@ document.addEventListener("click", async ev => {
 });
 $("#drawerBackdrop").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") { closeDrawer(); $("#userPop")?.setAttribute("hidden", ""); }
+  if (e.key === "Escape") { $("#pv")?.remove(); S.pv = null; closeDrawer(); $("#userPop")?.setAttribute("hidden", ""); }
   if (e.key === "Enter" && e.target.matches("tr[data-go]")) location.hash = e.target.dataset.go;
 });
 document.addEventListener("input", e => {
@@ -2573,6 +2747,7 @@ document.addEventListener("input", e => {
     el.closest(".factor")?.classList.toggle("needs", !el.value.trim()); el.closest(".field")?.classList.remove("invalid");
     return;
   }
+  if (el.dataset.kpiextra !== undefined && S.form) { (S.form.data.kpiExtra ??= {})[el.dataset.kpiextra] = el.value; S.dirty = true; return; }
   if (el.dataset.mgrcomment && S.form) { S.form.data.managerEvaluation.comments = el.value; S.dirty = true; return; }
   if (el.dataset.ev && S.evalState) {
     S.evalState[el.dataset.ev] = el.value;
@@ -2585,6 +2760,7 @@ document.addEventListener("input", e => {
   }
   if (S.jdEdit && el.dataset.path?.startsWith("jd.")) {
     let v = el.value; if (el.dataset.num) v = v === "" ? null : Math.max(0, Number(v));
+    if (el.dataset.bool) { v = el.checked; setP(S.jdEdit.data, el.dataset.path.slice(3), v); rerenderJd(); return; }
     setP(S.jdEdit.data, el.dataset.path.slice(3), v); return;
   }
   if (!S.form) return;

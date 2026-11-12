@@ -13,6 +13,11 @@ service cloud.firestore {
     // Conflict of interest: the employee on the record is not the person acting
     function notSelf(data) { return data.get("employeeEmail", "") == "" || data.get("employeeEmail", "") != myEmail(); }
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    // A position's fixed standard must be an exact copy of the current HR template (or absent)
+    function stdOk() {
+      return request.resource.data.get("standard", null) == null
+        || request.resource.data.standard.items == get(/databases/$(db)/documents/jobTemplates/$(request.resource.data.standard.templateId)).data.fixedItems;
+    }
 
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
@@ -44,12 +49,10 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // Job description templates per title: HR / Admin, or the manager of that department
+    // Job description templates per title = the fixed job standard. Maintained by HR / Admin only.
     match /jobTemplates/{id} {
       allow read: if isActive();
-      allow create, update: if isStaffHR() || (isManager() && request.resource.data.dept == me().departmentId
-                                               && (resource == null || resource.data.dept == me().departmentId));
-      allow delete: if isStaffHR() || (isManager() && resource.data.dept == me().departmentId);
+      allow write: if isStaffHR();
     }
 
     // Job title library. Everyone signed in reads it; only Admin edits it.
@@ -74,6 +77,8 @@ service cloud.firestore {
             && request.resource.data.get("evaluation", null) == null
             && request.resource.data.get("finalApproval", null) == null
             && request.resource.data.status in ["draft", "submitted"]
+            && request.resource.data.get("personalGrade", null) == null
+            && stdOk()
             && notSelf(request.resource.data));
 
       allow update: if isAdmin()
@@ -90,14 +95,16 @@ service cloud.firestore {
             && request.resource.data.departmentId == me().departmentId
             && resource.data.status in ["draft", "returned"]
             && request.resource.data.status in ["draft", "submitted"]
-            && !changed().hasAny(["evaluation", "finalApproval", "managerApproval"])
+            && !changed().hasAny(["evaluation", "finalApproval", "managerApproval", "personalGrade"])
+            && (!changed().hasAny(["standard"]) || stdOk())
             && (!changed().hasAny(["managerEvaluation"]) || notSelf(resource.data)))
         // Manager: update the job description (sections 1–11) at any later status — no scores, status, grade or employee changes
         || (isManager()
             && resource.data.departmentId == me().departmentId
             && request.resource.data.departmentId == me().departmentId
             && request.resource.data.status == resource.data.status
-            && !changed().hasAny(["evaluation", "finalApproval", "managerApproval", "managerEvaluation", "status", "employeeEmail", "employeeCode", "fullName", "returnComment"])
+            && !changed().hasAny(["evaluation", "finalApproval", "managerApproval", "managerEvaluation", "status", "employeeEmail", "employeeCode", "fullName", "returnComment", "personalGrade"])
+            && (!changed().hasAny(["standard"]) || stdOk())
             && request.resource.data.position.get("currentGrade", "") == resource.data.position.get("currentGrade", ""))
         // HR Director / HR Manager: final approval or return to HR (four-eyes + conflict of interest)
         || (isDirector()
