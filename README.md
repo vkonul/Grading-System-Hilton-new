@@ -30,6 +30,17 @@ Lokal işə salmaq: istənilən statik server, məsələn `npx serve .` və ya V
 | Departament meneceri | Yalnız öz departamenti, 1–11-ci bölmələr, göndərmə |
 | Gözləmədə | "Rol gözlənilir" ekranı |
 
+## Proses (status axını)
+```
+Qaralama → (Menecer göndərir) Göndərilib → (HR ballayır) Qiymətləndirilir
+   → (HR "Menecerin təsdiqinə göndər") Menecer təsdiqində → (Departament meneceri təsdiqləyir) Təsdiqlənib
+                                                       ↘ (Menecer şərhlə HR-a qaytarır) Qiymətləndirilir
+HR profili natamam görsə → Qaytarılıb → Menecer düzəldib yenidən göndərir
+```
+- Təsdiq avtomatik olaraq vəzifənin departamentinin menecerinə düşür (həmin departamentə təyin olunmuş `manager` rolu).
+- Menecer yalnız öz departamentinin işçilərini görür. HR yekun təsdiq verə bilmir; Admin ehtiyat olaraq birbaşa təsdiqləyə bilər.
+- Kitabxana (departamentlər, vəzifə adları, səviyyələr) Admin tərəfindən redaktə olunur və Firestore-da `departments` kolleksiyasında saxlanılır.
+
 UI düymələri rola görə gizlədilir, əsl qoruma isə `firestore.rules` qaydalarıdır.
 
 ## Fayllar

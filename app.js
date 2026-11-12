@@ -2,7 +2,7 @@
 // Plain ES module, no build step. Firebase v10 modular SDK from the CDN, SheetJS as global XLSX.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 /* =====================================================================
    1) Firebase config (project: grade-system-new)
@@ -85,6 +85,13 @@ const DEPARTMENTS = [
    titles:["Procurement Manager","Purchasing Manager","Procurement Officer","Purchasing Officer","Purchasing Coordinator","Logistics Coordinator","Receiving Supervisor","Receiving Clerk","Storekeeper","Inventory Controller"] }
 ];
 const DEPT = Object.fromEntries(DEPARTMENTS.map(d => [d.code, d]));
+// Built-in library = default. Admin edits are stored in Firestore `departments/{code}` and replace it at sign-in.
+const DEFAULT_DEPARTMENTS = JSON.parse(JSON.stringify(DEPARTMENTS));
+function applyLibrary(list) {
+  DEPARTMENTS.splice(0, DEPARTMENTS.length, ...list);
+  Object.keys(DEPT).forEach(k => delete DEPT[k]);
+  DEPARTMENTS.forEach(d => { d.titles = d.titles || []; d.levels = d.levels || {}; DEPT[d.code] = d; });
+}
 
 /* =====================================================================
    3) Grading rules (spec 5D)
@@ -138,6 +145,8 @@ function suggestLevel(title) {
   if (L6_WORDS.some(w => t.includes(w)) || /Assistant$/.test(t)) return "L6";
   return "L5";
 }
+// Level for a title: admin's per-department override first, otherwise the automatic rule.
+function levelFor(title, deptCode) { return DEPT[deptCode]?.levels?.[title] || suggestLevel(title); }
 const gradeIdx = g => GRADES.indexOf(g);
 const inRange = (g, lvl) => { const r = LEVELS[lvl]?.range; if (!r || !g) return true; const i = gradeIdx(g); return i >= gradeIdx(r[0]) && i <= gradeIdx(r[1]); };
 const rangeText = lvl => LEVELS[lvl] ? `${LEVELS[lvl].range[0]}–${LEVELS[lvl].range[1]}` : "—";
@@ -188,7 +197,7 @@ const OPTS = {
   supervision:{ close:["Close","Sıx"], general:["General","Ümumi"], minimal:["Minimal","Minimal"] },
   travel:{ none:["None","Yoxdur"], occasional:["Occasional","Arabir"], frequent:["Frequent","Tez-tez"] }
 };
-const STATUSES = { draft:["Draft","Qaralama"], submitted:["Submitted","Göndərilib"], under_evaluation:["Under evaluation","Qiymətləndirilir"], returned:["Returned","Qaytarılıb"], approved:["Approved","Təsdiqlənib"] };
+const STATUSES = { draft:["Draft","Qaralama"], submitted:["Submitted","Göndərilib"], under_evaluation:["Under evaluation","Qiymətləndirilir"], manager_approval:["Awaiting manager approval","Menecer təsdiqində"], returned:["Returned","Qaytarılıb"], approved:["Approved","Təsdiqlənib"] };
 const ROLES = { admin:["Admin","Administrator"], hr:["HR Evaluator","HR qiymətləndirici"], manager:["Department Manager","Departament meneceri"], pending:["Pending","Gözləmədə"] };
 
 // [key, EN, AZ, type, required?]  types: text | textarea | number | date | grade | jobLevel | dept | jobTitle | opt:<list> | yesno
@@ -353,7 +362,7 @@ const STR = {
   explainDiff:["Explain why the grade differs","Dərəcənin fərqlənmə səbəbini izah edin"], scoreAll:["Score all 9 factors to get a recommendation","Tövsiyə üçün 9 faktorun hamısını qiymətləndirin"],
   outOfRange:["The final grade is outside the suggested range for this job level.","Yekun dərəcə bu vəzifə səviyyəsi üçün tövsiyə olunan aralıqdan kənardadır."],
   scored:["scored","qiymətləndirilib"],
-  libTitle:["Job Title Library","Vəzifə adları kitabxanası"], libSub:["15 departments with suggested levels and grade ranges. Read-only.","Tövsiyə olunan səviyyə və dərəcə aralıqları ilə 15 departament. Yalnız oxumaq üçün."], titlesCount:["titles","vəzifə"],
+  libTitle:["Job Title Library","Vəzifə adları kitabxanası"], libSub:["Departments, job titles, suggested levels and grade ranges.","Departamentlər, vəzifə adları, tövsiyə olunan səviyyələr və dərəcə aralıqları."], titlesCount:["titles","vəzifə"],
   reportsTitle:["Reports","Hesabatlar"], reportsSub:["Download Excel (.xlsx) reports. Headers follow the current language.","Excel (.xlsx) hesabatlarını yükləyin. Başlıqlar cari dildədir."],
   repA:["A. Grading Summary","A. Dərəcələndirmə xülasəsi"], repADesc:["One row per position: factor scores, total, recommended and final grade.","Hər vəzifə üçün bir sətir: faktor balları, ümumi bal, tövsiyə olunan və yekun dərəcə."],
   repB:["B. Full Job Profiles","B. Tam vəzifə profilləri"], repBDesc:["All profile fields in 3 sheets: Positions, Responsibilities, Evaluations.","Bütün profil sahələri 3 vərəqdə: Vəzifələr, Öhdəliklər, Qiymətləndirmələr."],
@@ -380,6 +389,29 @@ const STR = {
   confirmApprove:["Approve this position with grade {g}?","Bu vəzifə {g} dərəcəsi ilə təsdiqlənsin?"], confirmReturn:["Return this position to the manager for changes?","Bu vəzifə düzəliş üçün menecerə qaytarılsın?"],
   hrComment:["HR Comment","HR şərhi"], created:["Created","Yaradılıb"],
   sheetSummary:["Summary","Xülasə"], sheetPositions:["Positions","Vəzifələr"], sheetResp:["Responsibilities","Öhdəliklər"], sheetEval:["Evaluations","Qiymətləndirmələr"], sheetJD:["Job Description","Vəzifə təlimatı"],
+  sendToManager:["Send to manager for approval","Menecerin təsdiqinə göndər"], approveDirect:["Approve directly (Admin)","Birbaşa təsdiqlə (Admin)"],
+  tSentToManager:["Sent to the department manager for approval","Departament menecerinin təsdiqinə göndərildi"],
+  confirmSend:["Send grade {g} to the {d} manager for approval?","{g} dərəcəsi “{d}” menecerinin təsdiqinə göndərilsin?"],
+  mgrPanelTitle:["Your approval is required","Təsdiqiniz tələb olunur"],
+  mgrPanelText:["HR proposed grade {g} for this position. Approve it, or return it to HR with a comment.","HR bu vəzifə üçün {g} dərəcəsini təklif edib. Təsdiqləyin və ya şərhlə HR-a qaytarın."],
+  mgrComment:["Manager comment","Menecerin şərhi"], mgrApprove:["Approve grade","Dərəcəni təsdiqlə"], mgrReturn:["Return to HR","HR-a qaytar"],
+  tMgrReturned:["Returned to HR","HR-a qaytarıldı"], waitingMgr:["Waiting for approval by the {d} manager","“{d}” menecerinin təsdiqini gözləyir"],
+  waitingMine:["Waiting for my approval","Təsdiqimi gözləyənlər"], pendingMineBanner:["{n} position(s) are waiting for your approval","{n} vəzifə təsdiqinizi gözləyir"],
+  mgrReturnedBanner:["Returned by the manager","Menecer tərəfindən qaytarılıb"], managerApproval:["Manager approval","Menecer təsdiqi"],
+  mgrDecision:["Manager decision","Menecerin qərarı"], mgrBy:["Manager","Menecer"], mgrDate:["Decision date","Qərar tarixi"],
+  dec_pending:["Pending","Gözləyir"], dec_approved:["Approved","Təsdiqləndi"], dec_returned:["Returned to HR","HR-a qaytarıldı"],
+  confirmMgrApprove:["Approve grade {g} for this position?","Bu vəzifə üçün {g} dərəcəsi təsdiqlənsin?"],
+  deptsNoManager:["Departments without a manager — approvals there can only be done by an Admin:","Meneceri olmayan departamentlər — oradakı təsdiqləri yalnız Admin edə bilər:"],
+  libEdit:["Edit library","Kitabxananı redaktə et"], libSave:["Save library","Kitabxananı yadda saxla"], addTitle:["+ Add title","+ Vəzifə əlavə et"],
+  newTitle:["New job title","Yeni vəzifə adı"], addDept:["+ New department","+ Yeni departament"], delDept:["Delete department","Departamenti sil"],
+  deptCode:["Code","Kod"], nameAz:["Name (AZ)","Ad (AZ)"], nameEn:["Name (EN)","Ad (EN)"], descAzL:["Description (AZ)","Təsvir (AZ)"], descEnL:["Description (EN)","Təsvir (EN)"],
+  levelAutoOpt:["Auto ({l})","Avto ({l})"], titleName:["Job title","Vəzifə adı"], delTitle:["Delete title","Vəzifəni sil"],
+  libEditHint:["Changes apply to new positions. Existing positions keep their title and department until they are edited.","Dəyişikliklər yeni vəzifələrə tətbiq olunur. Mövcud vəzifələr redaktə edilənə qədər öz adını və departamentini saxlayır."],
+  deptInUse:["{n} position(s) use this department — move them first","{n} vəzifə bu departamentdən istifadə edir — əvvəlcə onları köçürün"],
+  tCodeInvalid:["Department code must be 2–5 Latin capital letters and unique","Departament kodu 2–5 böyük latın hərfi olmalı və təkrarlanmamalıdır"],
+  tNameRequired:["Department names (AZ and EN) are required","Departament adları (AZ və EN) mütləqdir"],
+  tDupTitle:["Duplicate title in the same department: {t}","Eyni departamentdə təkrar vəzifə: {t}"], tLibSaved:["Library saved","Kitabxana yadda saxlanıldı"],
+  tMoved:["Moved to {d}","“{d}” departamentinə köçürüldü"], titlesHead:["Job titles","Vəzifə adları"],
   colSection:["Section","Bölmə"], colField:["Field","Sahə"], colValue:["Value","Dəyər"], general:["General","Ümumi"], no_:["No.","№"]
 };
 const I18N = { az:{}, en:{} };
@@ -582,7 +614,7 @@ const myDept = () => S.profile?.departmentId || "";
 const badge = s => `<span class="badge st-${esc(s)}">${esc(statusLabel(s))}</span>`;
 const pill = g => g ? `<span class="pill">${esc(g)}</span>` : `<span class="pill empty">—</span>`;
 const finalOf = e => e.evaluation?.finalGrade || "";
-const icon = n => ({ total:"▤", submitted:"➤", under_evaluation:"✎", approved:"✓", plus:"+", list:"☰", cards:"▦", export:"⤓" }[n] || "•");
+const icon = n => ({ total:"▤", submitted:"➤", under_evaluation:"✎", manager_approval:"⏳", approved:"✓", plus:"+", list:"☰", cards:"▦", export:"⤓" }[n] || "•");
 
 function toast(msg, type = "") {
   const el = document.createElement("div");
@@ -665,6 +697,14 @@ async function signIn() {
 }
 async function doSignOut() { await signOut(auth); S.profile = null; S.employees = null; S.users = null; location.hash = "#/login"; }
 
+async function loadLibrary() {
+  try {
+    const snap = await getDocs(collection(db, "departments"));
+    S.libDocIds = new Set(snap.docs.map(d => d.id));
+    if (snap.docs.length) applyLibrary(snap.docs.map(d => ({ code:d.id, ...d.data() })).sort((a, b) => (a.order ?? 999) - (b.order ?? 999)));
+    else applyLibrary(clone(DEFAULT_DEPARTMENTS));
+  } catch (e) { console.warn("library", e); }
+}
 async function loadEmployees(force = false) {
   if (S.employees && !force) return S.employees;
   let snap;
@@ -812,7 +852,7 @@ function scrPending() {
 async function scrDashboard() {
   const list = await loadEmployees(true);
   const count = s => list.filter(e => e.status === s).length;
-  const stats = [["total", t("totalPositions"), list.length], ["submitted", statusLabel("submitted"), count("submitted")],
+  const stats = [["total", t("totalPositions"), list.length], ["submitted", statusLabel("submitted"), count("submitted")], ["manager_approval", statusLabel("manager_approval"), count("manager_approval")],
                  ["under_evaluation", statusLabel("under_evaluation"), count("under_evaluation")], ["approved", statusLabel("approved"), count("approved")]];
   const byGrade = GRADES.map(g => [g, list.filter(e => finalOf(e) === g).length]);
   const max = Math.max(1, ...byGrade.map(x => x[1]));
@@ -826,6 +866,8 @@ async function scrDashboard() {
       ${isHR() ? `<a class="btn btn-secondary" href="#/positions?status=submitted">${t("waitingEval")} (${count("submitted")})</a>` : ""}
     </div></div>
   ${noDept ? `<div class="banner warn"><b>${t("tNoDept")}</b></div>` : ""}
+  ${isMgr() && count("manager_approval") ? `<div class="banner info row" style="justify-content:space-between"><b style="margin:0">${t("pendingMineBanner", { n:count("manager_approval") })}</b>
+    <a class="btn btn-primary" href="#/positions?status=manager_approval">${t("waitingMine")}</a></div>` : ""}
   ${isMgr() ? `<p class="small muted" style="margin-bottom:12px">${t("myDeptOnly")}</p>` : ""}
   <div class="stats">${stats.map(([k, lbl, n]) => `
     <div class="card stat"><span class="ic" aria-hidden="true">${icon(k)}</span><div><div class="num">${n}</div><div class="lbl">${esc(lbl)}</div></div></div>`).join("")}</div>
@@ -845,6 +887,7 @@ async function scrDashboard() {
   <section class="card" style="margin-top:16px"><h2>${t("quickActions")}</h2><div class="row">
     <a class="btn btn-primary" href="#/positions/new">${t("newPosition")}</a>
     ${isHR() ? `<a class="btn btn-secondary" href="#/positions?status=submitted">${t("waitingEval")}</a>` : ""}
+    ${isMgr() ? `<a class="btn btn-secondary" href="#/positions?status=manager_approval">${t("waitingMine")} (${count("manager_approval")})</a>` : ""}
     <a class="btn btn-ghost" href="#/library">${t("navLibrary")}</a>
     <a class="btn btn-ghost" href="#/reports">${t("navReports")}</a>
     ${isAdmin() && !list.length ? `<button class="btn btn-ghost" data-act="sample">${t("loadSample")}</button>` : ""}
@@ -1069,7 +1112,7 @@ function respHTML(d) {
       <div class="fields">${fs.map(f => fieldHTML(`responsibilities.${i}.${f[0]}`, f, r[f[0]], { full: f[0] === "task" })).join("")}</div></div>`).join("")}
     <button type="button" class="btn btn-secondary" data-act="addresp" style="margin-top:12px">${t("addResp")}</button>`;
 }
-function sec12ReadOnly(ev, compact) {
+function sec12ReadOnly(ev, compact, status, ma) {
   if (!ev || !ev.scores) return `<p class="muted">${t("noScores")}</p>`;
   const st = scoreTotal(ev.scores);
   return `<p class="small muted">${t("readOnlyHR")}</p><div class="kv">
@@ -1077,7 +1120,9 @@ function sec12ReadOnly(ev, compact) {
     <div><div class="k">${esc(L(["Total Evaluation Score","Ümumi qiymətləndirmə balı"]))}</div><div class="v"><b>${ev.totalScore ?? st.total}</b> / 45</div></div>
     <div><div class="k">${esc(L(["Recommended Job Grade","Tövsiyə olunan dərəcə"]))}</div><div class="v">${pill(ev.recommendedGrade)}</div></div>
     <div><div class="k">${esc(L(["Final Approved Job Grade","Yekun təsdiqlənmiş dərəcə"]))}</div><div class="v">${pill(ev.finalGrade)}</div></div>
-    <div><div class="k">${esc(L(["Approval Status","Təsdiq statusu"]))}</div><div class="v">${ev.approvalStatus ? badge(ev.approvalStatus) : "—"}</div></div>
+    <div><div class="k">${esc(L(["Approval Status","Təsdiq statusu"]))}</div><div class="v">${(status || ev.approvalStatus) ? badge(status || ev.approvalStatus) : "—"}</div></div>
+    ${ma?.decision ? `<div><div class="k">${t("mgrDecision")}</div><div class="v">${esc(t("dec_" + ma.decision))}${ma.byName ? " · " + esc(ma.byName) : ""}${ma.date ? " · " + esc(ma.date) : ""}</div></div>
+      ${ma.comment ? `<div class="full"><div class="k">${t("mgrComment")}</div><div class="v">${esc(ma.comment)}</div></div>` : ""}` : ""}
     <div><div class="k">${esc(L(["Evaluation Date","Qiymətləndirmə tarixi"]))}</div><div class="v">${esc(ev.evaluationDate || "—")}</div></div>
     <div><div class="k">${esc(L(["Evaluator","Qiymətləndirici"]))}</div><div class="v">${esc(ev.evaluatorName || "—")}</div></div>
     ${compact ? "" : `<div class="full"><div class="k">${esc(L(["Evaluator Comments","Qiymətləndiricinin şərhləri"]))}</div><div class="v">${esc(ev.comments || "—")}</div></div>`}
@@ -1106,7 +1151,7 @@ function formHTML() {
     <div style="margin-top:16px" id="progressBox">${progressHTML(d)}</div></section>
   <form id="jobForm" novalidate onsubmit="return false">
     ${SECTIONS.map(s => accHTML(s, body(s), d)).join("")}
-    ${accHTML(SEC12, sec12ReadOnly(d.evaluation), d)}
+    ${accHTML(SEC12, sec12ReadOnly(d.evaluation, false, S.form.origStatus, d.managerApproval), d)}
   </form>
   <div class="actionbar">
     <button type="button" class="btn btn-ghost" data-act="formcancel">${t("cancel")}</button>
@@ -1131,7 +1176,7 @@ function applyTitle(title) {
   const d = S.form.data, p = d.position;
   p.jobTitle = title;
   if (!title) return;
-  const lvl = suggestLevel(title);
+  const lvl = levelFor(title, p.department);
   p.jobLevel = lvl;
   if (!p.positionId || /^POS-[A-Z]+-\d{3}$/.test(p.positionId) && !p.positionId.startsWith(`POS-${p.department}-`)) p.positionId = nextPositionId(p.department, S.form.id);
   const tpl = LEVEL_TEMPLATES[lvl];
@@ -1189,7 +1234,6 @@ async function saveForm(submit) {
   else if (!f.id || isMgr()) status = "draft";
   else status = f.origStatus;
   d.status = status;
-  if (d.evaluation && isHR()) d.evaluation.approvalStatus = status;
   const payload = pickPersist(d);
   payload.updatedBy = S.user.uid; payload.updatedAt = serverTimestamp();
   const btns = $$(".actionbar .btn"); btns.forEach(b => b.disabled = true);
@@ -1257,7 +1301,9 @@ async function scrDetail({ id, seq }) {
     <div style="text-align:center"><div class="label-caps" style="margin-bottom:6px">${t("grade")}</div><span class="pill lg ${finalOf(e) || p.currentGrade ? "" : "empty"}">${esc(finalOf(e) || p.currentGrade || "—")}</span>
       <div class="small muted" style="margin-top:6px">${t("suggestedRange")}: ${rangeText(p.jobLevel)}</div></div></div>
     ${e.status === "returned" && e.returnComment ? `<div class="banner warn" style="margin:16px 0 0"><b>${t("hrComment")}</b>${esc(e.returnComment)}</div>` : ""}
+    ${e.status === "manager_approval" && !canMgrDecide(e) ? `<div class="banner info" style="margin:16px 0 0"><b>⏳ ${esc(t("waitingMgr", { d:deptName(e.departmentId) }))}</b></div>` : ""}
   </section>
+  ${e.status === "manager_approval" && canMgrDecide(e) ? mgrPanelHTML(e) : ""}
   <div class="row no-print" style="margin-bottom:16px" id="detailActions">
     ${edit ? `<a class="btn btn-primary" href="#/positions/${esc(e.id)}/edit">${t("edit")}</a>` : ""}
     ${isHR() ? `<a class="btn btn-secondary" href="#/positions/${esc(e.id)}/evaluate">${t("evaluate")}</a>` : ""}
@@ -1269,8 +1315,44 @@ async function scrDetail({ id, seq }) {
   <div class="stack">
     ${card("·", t("employee"), "", kvHTML(TOP_FIELDS, e))}
     ${secs}
-    ${card(12, L(SEC12), S.lang === "en" ? SEC12.az : SEC12.en, sec12ReadOnly(e.evaluation))}
+    ${card(12, L(SEC12), S.lang === "en" ? SEC12.az : SEC12.en, sec12ReadOnly(e.evaluation, false, e.status, e.managerApproval))}
   </div>`;
+}
+
+// Manager approval step (status manager_approval → approved | back to HR)
+function canMgrDecide(e) { return isAdmin() || (isMgr() && e.departmentId === myDept()); }
+function mgrPanelHTML(e) {
+  const ev = e.evaluation || {}, st = scoreTotal(ev.scores);
+  return `<section class="card no-print" id="mgrPanel" style="margin-bottom:16px;border-color:var(--accent)">
+    <div class="label-caps">${t("managerApproval")}</div><h2 style="margin:4px 0 6px">${t("mgrPanelTitle")}</h2>
+    <p>${esc(t("mgrPanelText", { g:ev.finalGrade || "—" }))}</p>
+    <div class="row" style="gap:16px;margin:12px 0">
+      <div><div class="k small muted">${t("totalScore")}</div><b style="font-size:20px">${ev.totalScore ?? st.total} / 45</b></div>
+      <div><div class="k small muted">${t("recommended")}</div>${pill(ev.recommendedGrade)}</div>
+      <div><div class="k small muted">${t("finalApproved")}</div><span class="pill lg">${esc(ev.finalGrade || "—")}</span></div>
+      <div><div class="k small muted">${t("evaluator")}</div>${esc(ev.evaluatorName || "—")}</div></div>
+    ${ev.comments ? `<p class="small"><b>${t("comments")}:</b> ${esc(ev.comments)}</p>` : ""}
+    <div class="field" style="margin-top:12px"><label for="mgrComment">${t("mgrComment")}</label><textarea id="mgrComment"></textarea>
+      <span class="hint">${t("tNeedComment")} — ${t("mgrReturn")}</span></div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn btn-primary" data-act="mgrapprove" data-id="${esc(e.id)}">✓ ${t("mgrApprove")}</button>
+      <button class="btn btn-warn" data-act="mgrreturn" data-id="${esc(e.id)}">${t("mgrReturn")}</button></div></section>`;
+}
+async function mgrDecide(id, decision) {
+  const e = await loadOne(id); if (!e || !canMgrDecide(e)) { toast(t("tPermission"), "err"); return; }
+  const comment = ($("#mgrComment")?.value || "").trim();
+  if (decision === "returned" && !comment) { toast(t("tNeedComment"), "err"); $("#mgrComment")?.closest(".field")?.classList.add("invalid"); $("#mgrComment")?.focus(); return; }
+  const g = e.evaluation?.finalGrade;
+  if (decision === "approved" && !(await confirmDlg(t("confirmMgrApprove", { g }), "", t("mgrApprove")))) return;
+  if (decision === "returned" && !(await confirmDlg(t("confirmTitle"), "", t("mgrReturn")))) return;
+  const upd = { status:decision === "approved" ? "approved" : "under_evaluation",
+    managerApproval:{ decision, comment, byUid:S.user.uid, byName:S.profile?.displayName || S.user.email || "", date:today() },
+    updatedAt:serverTimestamp(), updatedBy:S.user.uid };
+  if (decision === "approved") { upd["position.currentGrade"] = g; upd["position.lastEvaluationDate"] = today(); }
+  try {
+    await updateDoc(doc(db, "employees", id), upd);
+    S.employees = null; toast(decision === "approved" ? t("tApproved") : t("tMgrReturned"), "ok"); render();
+  } catch (err) { toast(errMsg(err), "err"); }
 }
 
 // S7 — Evaluation
@@ -1296,6 +1378,7 @@ function evalHTML() {
   return `
   <div class="page-head"><div><div class="label-caps">${esc(L(SEC12))}</div><h1>${t("evaluate")}: ${esc(e.fullName)}</h1>
     <p class="sub">${esc(p.jobTitle)} · ${esc(deptName(e.departmentId))} · ${badge(e.status)}</p></div></div>
+  ${e.managerApproval?.decision === "returned" && e.status === "under_evaluation" ? `<div class="banner warn"><b>${t("mgrReturnedBanner")}${e.managerApproval.byName ? " — " + esc(e.managerApproval.byName) : ""}</b>${esc(e.managerApproval.comment || "")}</div>` : ""}
   <div class="eval-layout">
     <aside class="summary"><div class="card sticky"><div class="label-caps">${t("profileSummary")}</div>
       <h3 style="margin-top:6px">${esc(p.jobTitle)}</h3>
@@ -1330,7 +1413,8 @@ function evalHTML() {
     <a class="btn btn-ghost" href="#/positions/${esc(e.id)}">${t("cancel")}</a>
     <button type="button" class="btn btn-warn" data-act="evreturn">${t("returnChanges")}</button>
     <button type="button" class="btn btn-secondary" data-act="evsave">${t("saveScores")}</button>
-    <button type="button" class="btn btn-primary" data-act="evapprove">${t("approve")}</button>
+    ${isAdmin() ? `<button type="button" class="btn btn-ghost" data-act="evapprove">${t("approveDirect")}</button>` : ""}
+    <button type="button" class="btn btn-primary" data-act="evsend">${t("sendToManager")}</button>
   </div>`;
 }
 function rerenderEval() {
@@ -1345,17 +1429,18 @@ async function saveEval(mode) {
   const st = scoreTotal(es.scores), rec = st.complete ? recommendGrade(st.total) : null;
   const differs = rec && es.finalGrade && es.finalGrade !== rec;
   const comment = es.comments.trim();
-  if (mode === "approve") {
+  if (mode === "approve" || mode === "send") {
     if (!st.complete || !es.finalGrade) { toast(t("tNeedAll"), "err"); return; }
     if (differs && !comment) { toast(`${t("tNeedComment")} — ${t("explainDiff")}`, "err"); $("#evComments")?.focus(); return; }
-    if (!(await confirmDlg(t("confirmApprove", { g:es.finalGrade }), "", t("approve")))) return;
+    if (mode === "approve" && !(await confirmDlg(t("confirmApprove", { g:es.finalGrade }), "", t("approve")))) return;
+    if (mode === "send" && !(await confirmDlg(t("confirmSend", { g:es.finalGrade, d:deptName(e.departmentId) }), "", t("sendToManager")))) return;
   }
   if (mode === "return") {
     if (!comment) { toast(t("tNeedComment"), "err"); $("#evComments")?.closest(".field")?.classList.add("invalid"); $("#evComments")?.focus(); return; }
     if (!(await confirmDlg(t("confirmReturn"), "", t("returnChanges")))) return;
   }
   if (mode === "save" && differs && !comment) { toast(`${t("tNeedComment")} — ${t("explainDiff")}`, "err"); $("#evComments")?.focus(); return; }
-  const status = mode === "approve" ? "approved" : mode === "return" ? "returned" : "under_evaluation";
+  const status = mode === "approve" ? "approved" : mode === "send" ? "manager_approval" : mode === "return" ? "returned" : "under_evaluation";
   const evaluation = {
     scores:Object.fromEntries(FACTORS.filter(f => es.scores[f.key]).map(f => [f.key, Number(es.scores[f.key])])),
     totalScore:st.total, recommendedGrade:rec, finalGrade:es.finalGrade || "", comments:comment, approvalStatus:status,
@@ -1364,27 +1449,38 @@ async function saveEval(mode) {
   const upd = { status, evaluation, updatedAt:serverTimestamp(), updatedBy:S.user.uid };
   if (mode === "approve") { upd["position.currentGrade"] = es.finalGrade; upd["position.lastEvaluationDate"] = today(); upd.returnComment = ""; }
   if (mode === "return") upd.returnComment = comment;
+  if (mode === "send") upd.managerApproval = { decision:"pending", comment:"", byUid:"", byName:"", date:"", sentAt:today(), sentBy:evaluation.evaluatorName };
+  if (mode === "approve") upd.managerApproval = { decision:"approved", comment:"", byUid:S.user.uid, byName:evaluation.evaluatorName + " (Admin)", date:today() };
   $$(".actionbar .btn").forEach(b => b.disabled = true);
   try {
     await updateDoc(doc(db, "employees", e.id), upd);
     S.employees = null; S.evalState = null;
-    toast(mode === "approve" ? t("tApproved") : mode === "return" ? t("tReturned") : t("tSaved"), "ok");
+    toast(mode === "approve" ? t("tApproved") : mode === "send" ? t("tSentToManager") : mode === "return" ? t("tReturned") : t("tSaved"), "ok");
     location.hash = `#/positions/${e.id}`;
   } catch (err) { toast(errMsg(err), "err"); $$(".actionbar .btn").forEach(b => b.disabled = false); }
 }
 
-// S8 — Library
-function scrLibrary() {
-  return `<div class="page-head"><div><h1>${t("libTitle")}</h1><p class="sub">${t("libSub")}</p></div></div>
+// S8 — Library (read-only for everyone; Admin can edit: titles, levels, departments)
+async function scrLibrary() {
+  if (isAdmin()) await loadEmployees();
+  const editing = !!S.libEdit;
+  const chipsFrom = editing ? S.libEdit : DEPARTMENTS;
+  return `<div class="page-head"><div><h1>${t("libTitle")}</h1><p class="sub">${t("libSub")}</p></div>
+      ${isAdmin() && !editing ? `<button class="btn btn-secondary" data-act="libedit">✎ ${t("libEdit")}</button>` : ""}
+      ${editing ? `<button class="btn btn-secondary" data-act="libadddept">${t("addDept")}</button>` : ""}</div>
+    ${editing ? `<div class="banner info"><span class="small">${t("libEditHint")}</span></div>` : `
     <div class="card" style="padding:16px;margin-bottom:16px"><div class="field"><label for="libq">${t("search")}</label>
-      <input id="libq" type="search" value="${esc(S.libQ)}" data-lib="q" autocomplete="off"></div></div>
+      <input id="libq" type="search" value="${esc(S.libQ)}" data-lib="q" autocomplete="off"></div></div>`}
     <div class="dept-chips" role="group" aria-label="${t("department")}">
       <button data-libdept="" aria-pressed="${!S.libDept}">${t("all")}</button>
-      ${DEPARTMENTS.map(d => `<button data-libdept="${d.code}" aria-pressed="${S.libDept === d.code}">${esc(d.code)} · ${esc(L(d))}</button>`).join("")}</div>
-    <div id="libResults"></div>`;
+      ${chipsFrom.filter(d => d.code).map(d => `<button data-libdept="${esc(d.code)}" aria-pressed="${S.libDept === d.code}">${esc(d.code)} · ${esc(L(d))}</button>`).join("")}</div>
+    <div id="libResults"></div>
+    ${editing ? `<div class="actionbar"><button class="btn btn-ghost" data-act="libcancel">${t("cancel")}</button>
+      <button class="btn btn-primary" data-act="libsave">${t("libSave")}</button></div>` : ""}`;
 }
 function renderLib() {
   const box = $("#libResults"); if (!box) return;
+  if (S.libEdit) { box.innerHTML = libEditHTML(); $$("#libResults textarea").forEach(autoGrow); return; }
   const q = S.libQ.trim().toLowerCase();
   const cards = DEPARTMENTS.filter(d => !S.libDept || d.code === S.libDept).map(d => {
     const deptHit = q && [d.en, d.az, d.code, d.descEn, d.descAz].join(" ").toLowerCase().includes(q);
@@ -1393,9 +1489,80 @@ function renderLib() {
     return `<section class="card"><div class="label-caps">${esc(d.code)} · ${d.titles.length} ${t("titlesCount")}</div>
       <h2 style="margin:4px 0 2px">${esc(L(d))}</h2><div class="small muted" style="margin-bottom:8px">${esc(S.lang === "en" ? d.az : d.en)}</div>
       <p class="small">${esc(S.lang === "en" ? d.descEn : d.descAz)}</p>
-      <ul class="titles">${titles.map(x => { const l = suggestLevel(x); return `<li><span class="n">${esc(x)}</span><span class="chip navy" title="${esc(L(LEVELS[l]))}">${l}</span><span class="chip">${rangeText(l)}</span></li>`; }).join("")}</ul></section>`;
+      <ul class="titles">${titles.map(x => { const l = levelFor(x, d.code); return `<li><span class="n">${esc(x)}</span><span class="chip navy" title="${esc(L(LEVELS[l]))}">${l}</span><span class="chip">${rangeText(l)}</span></li>`; }).join("")}</ul></section>`;
   }).join("");
   box.innerHTML = cards ? `<div class="grid">${cards}</div>` : `<div class="card"><div class="empty"><p>${t("noResults")}</p></div></div>`;
+}
+function startLibEdit() {
+  S.libEdit = DEPARTMENTS.map(d => ({ code:d.code, en:d.en, az:d.az, descEn:d.descEn || "", descAz:d.descAz || "", isNew:false,
+    rows:d.titles.map(n => ({ name:n, level:d.levels?.[n] || "" })) }));
+  S.libDept = ""; render();
+}
+const deptUseCount = code => (S.employees || []).filter(e => e.departmentId === code).length;
+function libEditHTML() {
+  const E = S.libEdit;
+  return `<div class="stack">${E.map((d, ci) => {
+    if (S.libDept && d.code !== S.libDept && !d.isNew) return "";
+    const used = d.isNew ? 0 : deptUseCount(d.code);
+    return `<section class="card" id="lib-${ci}">
+      <div class="row" style="justify-content:space-between;margin-bottom:12px"><span class="label-caps">${esc(d.code || "—")} · ${d.rows.length} ${t("titlesCount")}</span>
+        <button class="btn btn-danger" data-act="libdeldept" data-ci="${ci}" ${used || d.rows.length ? "disabled" : ""}
+          title="${used ? esc(t("deptInUse", { n:used })) : ""}">🗑 ${t("delDept")}</button></div>
+      ${used && d.rows.length === 0 ? `<p class="small" style="color:var(--warn)">${esc(t("deptInUse", { n:used }))}</p>` : ""}
+      <div class="fields">
+        <div class="field"><label for="le-${ci}-code">${t("deptCode")}</label><input id="le-${ci}-code" type="text" maxlength="5" data-le="${ci}.code" value="${esc(d.code)}" ${d.isNew ? "" : "disabled"} style="text-transform:uppercase"></div>
+        <div></div>
+        <div class="field"><label for="le-${ci}-az">${t("nameAz")}</label><input id="le-${ci}-az" type="text" data-le="${ci}.az" value="${esc(d.az)}"></div>
+        <div class="field"><label for="le-${ci}-en">${t("nameEn")}</label><input id="le-${ci}-en" type="text" data-le="${ci}.en" value="${esc(d.en)}"></div>
+        <div class="field"><label for="le-${ci}-descAz">${t("descAzL")}</label><textarea id="le-${ci}-descAz" data-le="${ci}.descAz">${esc(d.descAz)}</textarea></div>
+        <div class="field"><label for="le-${ci}-descEn">${t("descEnL")}</label><textarea id="le-${ci}-descEn" data-le="${ci}.descEn">${esc(d.descEn)}</textarea></div>
+      </div>
+      <div class="label-caps" style="margin:16px 0 4px">${t("titlesHead")}</div>
+      <div class="lt-head small muted"><span>${t("titleName")}</span><span>${t("level")}</span><span>${t("department")}</span><span></span></div>
+      ${d.rows.map((r, ti) => `<div class="lt-row">
+        <input type="text" id="lt-${ci}-${ti}" aria-label="${t("titleName")}" data-lt="${ci}.${ti}" value="${esc(r.name)}">
+        <select id="ll-${ci}-${ti}" aria-label="${t("level")}" data-ll="${ci}.${ti}"><option value="">${esc(t("levelAutoOpt", { l:suggestLevel(r.name) || "—" }))}</option>
+          ${Object.keys(LEVELS).map(l => `<option value="${l}" ${r.level === l ? "selected" : ""}>${l} · ${esc(L(LEVELS[l]))}</option>`).join("")}</select>
+        <select id="lm-${ci}-${ti}" aria-label="${t("department")}" data-lm="${ci}.${ti}">${E.map((x, xi) => x.code ? `<option value="${xi}" ${xi === ci ? "selected" : ""}>${esc(x.code)} · ${esc(L(x))}</option>` : "").join("")}</select>
+        <button class="icon-btn" data-act="libdeltitle" data-ci="${ci}" data-ti="${ti}" aria-label="${t("delTitle")}: ${esc(r.name)}" title="${t("delTitle")}">🗑</button></div>`).join("")}
+      <div class="row" style="margin-top:12px"><input type="text" id="lnew-${ci}" aria-label="${t("newTitle")}" placeholder="${t("newTitle")}" style="flex:1 1 220px;width:auto">
+        <button class="btn btn-secondary" data-act="libaddtitle" data-ci="${ci}">${t("addTitle")}</button></div>
+    </section>`; }).join("")}</div>`;
+}
+function rerenderLibEdit(focusId) {
+  const y = window.scrollY; renderLib(); window.scrollTo(0, y);
+  syncLibChips();
+  if (focusId) document.getElementById(focusId)?.focus({ preventScroll:true });
+}
+// keep the department chips in sync with edited names/codes
+function syncLibChips() {
+  const chips = $(".dept-chips"); if (chips) chips.innerHTML = `<button data-libdept="" aria-pressed="${!S.libDept}">${t("all")}</button>` +
+    S.libEdit.filter(d => d.code).map(d => `<button data-libdept="${esc(d.code)}" aria-pressed="${S.libDept === d.code}">${esc(d.code)} · ${esc(L(d))}</button>`).join("");
+}
+async function saveLibrary() {
+  const E = S.libEdit, codes = new Set();
+  for (const d of E) {
+    d.code = (d.code || "").trim().toUpperCase();
+    if (!/^[A-Z]{2,5}$/.test(d.code) || codes.has(d.code)) { toast(t("tCodeInvalid"), "err"); return; }
+    codes.add(d.code);
+    if (!(d.az || "").trim() || !(d.en || "").trim()) { toast(t("tNameRequired"), "err"); return; }
+    const seen = new Set();
+    for (const r of d.rows) { const n = r.name.trim(); if (!n) continue; if (seen.has(n.toLowerCase())) { toast(t("tDupTitle", { t:n }), "err"); return; } seen.add(n.toLowerCase()); }
+  }
+  const list = E.map((d, i) => {
+    const rows = d.rows.map(r => ({ name:r.name.trim(), level:r.level })).filter(r => r.name);
+    return { code:d.code, en:d.en.trim(), az:d.az.trim(), descEn:(d.descEn || "").trim(), descAz:(d.descAz || "").trim(), order:i,
+      titles:rows.map(r => r.name), levels:Object.fromEntries(rows.filter(r => r.level).map(r => [r.name, r.level])) };
+  });
+  try {
+    const batch = writeBatch(db);
+    list.forEach(d => batch.set(doc(db, "departments", d.code), { ...d, updatedAt:serverTimestamp(), updatedBy:S.user.uid }));
+    (S.libDocIds || new Set()).forEach(id => { if (!codes.has(id)) batch.delete(doc(db, "departments", id)); });
+    $$(".actionbar .btn").forEach(b => b.disabled = true);
+    await batch.commit();
+    S.libDocIds = codes; applyLibrary(list); S.libEdit = null;
+    toast(t("tLibSaved"), "ok"); render();
+  } catch (e) { toast(errMsg(e), "err"); $$(".actionbar .btn").forEach(b => b.disabled = false); }
 }
 afterHooks.set(scrLibrary, renderLib);
 
@@ -1425,7 +1592,10 @@ async function scrReports() {
 async function scrAdmin() {
   const snap = await getDocs(collection(db, "users"));
   S.users = snap.docs.map(d => ({ id:d.id, ...d.data() })).sort((a, b) => (a.displayName || a.email || "").localeCompare(b.displayName || b.email || ""));
+  const managed = new Set(S.users.filter(u => u.role === "manager" && u.departmentId).map(u => u.departmentId));
+  const noMgr = DEPARTMENTS.filter(d => !managed.has(d.code));
   return `<div class="page-head"><div><h1>${t("usersTitle")}</h1><p class="sub">${t("usersSub")}</p></div></div>
+  ${noMgr.length ? `<div class="banner warn"><b>${t("deptsNoManager")}</b><span class="small">${noMgr.map(d => esc(`${d.code} · ${L(d)}`)).join(", ")}</span></div>` : ""}
   <section class="card" style="margin-bottom:16px"><div class="rows">${S.users.map(u => {
     const me = u.id === S.user.uid;
     const initials = (u.displayName || u.email || "?").split(" ").map(s => s[0]).slice(0, 2).join("").toUpperCase();
@@ -1536,10 +1706,12 @@ const respHeaders = () => [fl(SECTIONS[0].fields[5]), fl(TOP_FIELDS[0]), t("no_"
 function evalRow(e) {
   const ev = e.evaluation || {};
   const o = { [fl(SECTIONS[0].fields[5])]:e.position?.positionId || "", [fl(TOP_FIELDS[0])]:e.employeeCode || "", [fl(TOP_FIELDS[1])]:e.fullName || "" };
-  EVAL_FIELDS.forEach(f => { const v = getP(ev, f[0]); o[fl(f)] = f[3] === "status" ? statusLabel(v) : (v ?? ""); });
+  EVAL_FIELDS.forEach(f => { const v = getP(ev, f[0]); o[fl(f)] = f[3] === "status" ? (e.evaluation ? statusLabel(e.status) : "") : (v ?? ""); });
+  const ma = e.managerApproval || {};
+  o[t("mgrDecision")] = ma.decision ? t("dec_" + ma.decision) : ""; o[t("mgrBy")] = ma.byName || ""; o[t("mgrDate")] = ma.date || ""; o[t("mgrComment")] = ma.comment || "";
   return o;
 }
-const evalHeaders = () => [fl(SECTIONS[0].fields[5]), fl(TOP_FIELDS[0]), fl(TOP_FIELDS[1]), ...EVAL_FIELDS.map(fl)];
+const evalHeaders = () => [fl(SECTIONS[0].fields[5]), fl(TOP_FIELDS[0]), fl(TOP_FIELDS[1]), ...EVAL_FIELDS.map(fl), t("mgrDecision"), t("mgrBy"), t("mgrDate"), t("mgrComment")];
 function exportB(filters) {
   if (!xlsxReady()) return;
   const list = sortByUpdated(filterList(scopeList(S.employees || []), filters));
@@ -1568,7 +1740,9 @@ async function exportC(id) {
     s.fields.forEach(f => add(sec, fl(f), xv(f, e[s.key]?.[f[0]])));
   });
   const sec12 = `12. ${L(SEC12)}`;
-  EVAL_FIELDS.forEach(f => { const v = getP(e.evaluation || {}, f[0]); add(sec12, fl(f), f[3] === "status" ? statusLabel(v) : v); });
+  EVAL_FIELDS.forEach(f => { const v = getP(e.evaluation || {}, f[0]); add(sec12, fl(f), f[3] === "status" ? (e.evaluation ? statusLabel(e.status) : "") : v); });
+  const ma = e.managerApproval || {};
+  if (ma.decision) { add(sec12, t("mgrDecision"), t("dec_" + ma.decision)); add(sec12, t("mgrBy"), ma.byName); add(sec12, t("mgrDate"), ma.date); add(sec12, t("mgrComment"), ma.comment); }
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, makeSheet(rows, [cs, cf, cv]), t("sheetJD"));
   const rh = [t("no_"), ...SECTIONS[2].fields.map(fl)];
@@ -1645,6 +1819,22 @@ document.addEventListener("click", async ev => {
     case "submitform": saveForm(true); break;
     case "evsave": saveEval("save"); break;
     case "evapprove": saveEval("approve"); break;
+    case "evsend": saveEval("send"); break;
+    case "libedit": startLibEdit(); break;
+    case "libcancel": S.libEdit = null; render(); break;
+    case "libsave": saveLibrary(); break;
+    case "libadddept": S.libEdit.push({ code:"", en:"", az:"", descEn:"", descAz:"", isNew:true, rows:[] }); S.libDept = "";
+      rerenderLibEdit(`le-${S.libEdit.length - 1}-code`); document.getElementById(`lib-${S.libEdit.length - 1}`)?.scrollIntoView({ block:"center" }); break;
+    case "libdeldept": S.libEdit.splice(Number(el.dataset.ci), 1); rerenderLibEdit(); break;
+    case "libdeltitle": S.libEdit[Number(el.dataset.ci)].rows.splice(Number(el.dataset.ti), 1); rerenderLibEdit(); break;
+    case "libaddtitle": {
+      const ci = Number(el.dataset.ci), inp = $(`#lnew-${ci}`), v = (inp?.value || "").trim();
+      if (!v) { inp?.focus(); break; }
+      if (S.libEdit[ci].rows.some(r => r.name.trim().toLowerCase() === v.toLowerCase())) { toast(t("tDupTitle", { t:v }), "err"); break; }
+      S.libEdit[ci].rows.push({ name:v, level:"" }); rerenderLibEdit(`lnew-${ci}`); break;
+    }
+    case "mgrapprove": mgrDecide(el.dataset.id, "approved"); break;
+    case "mgrreturn": mgrDecide(el.dataset.id, "returned"); break;
     case "evreturn": saveEval("return"); break;
   }
 });
@@ -1658,6 +1848,8 @@ document.addEventListener("input", e => {
   if (el.tagName === "TEXTAREA") autoGrow(el);
   if (el.dataset.filter) { S.filters[el.dataset.filter] = el.value; renderPosResults(); return; }
   if (el.dataset.lib) { S.libQ = el.value; renderLib(); return; }
+  if (S.libEdit && el.dataset.le) { const [ci, k] = el.dataset.le.split("."); S.libEdit[ci][k] = k === "code" ? el.value.toUpperCase() : el.value; return; }
+  if (S.libEdit && el.dataset.lt) { const [ci, ti] = el.dataset.lt.split(".").map(Number); S.libEdit[ci].rows[ti].name = el.value; return; }
   if (el.id === "titleSearch" && S.form) { S.form.titleSearch = el.value; rerenderForm(); return; }
   if (el.dataset.ev && S.evalState) {
     S.evalState[el.dataset.ev] = el.value;
@@ -1687,6 +1879,13 @@ document.addEventListener("change", e => {
   }
   if (el.dataset.ev === "finalGrade" && S.evalState) { S.evalState.finalGrade = el.value; S.evalState.finalTouched = true; rerenderEval(); return; }
   if (el.dataset.ev === "evaluationDate" && S.evalState) { S.evalState.evaluationDate = el.value; return; }
+  if (S.libEdit && el.dataset.ll) { const [ci, ti] = el.dataset.ll.split(".").map(Number); S.libEdit[ci].rows[ti].level = el.value; return; }
+  if (S.libEdit && el.dataset.lm) {
+    const [ci, ti] = el.dataset.lm.split(".").map(Number), to = Number(el.value);
+    if (to !== ci) { const [row] = S.libEdit[ci].rows.splice(ti, 1); S.libEdit[to].rows.push(row); toast(t("tMoved", { d:L(S.libEdit[to]) })); rerenderLibEdit(); }
+    return;
+  }
+  if (S.libEdit && el.dataset.le) { syncLibChips(); return; }
   if (el.dataset.urole) { saveUser(el.dataset.urole, { role:el.value }); return; }
   if (el.dataset.udept) { saveUser(el.dataset.udept, { departmentId:el.value || null }); return; }
   if (!S.form) return;
@@ -1730,6 +1929,7 @@ window.addEventListener("hashchange", () => {
   const { path } = parseHash();
   if (S.form && !/^#\/positions\/(new|[^/]+\/edit)$/.test(path)) { S.form = null; S.dirty = false; }
   if (S.evalState && !/\/evaluate$/.test(path)) S.evalState = null;
+  if (S.libEdit && path !== "#/library") S.libEdit = null;
   render();
   window.scrollTo(0, 0);
   $("#main").focus({ preventScroll:true });
@@ -1743,7 +1943,7 @@ getRedirectResult(auth).catch(e => { if (e?.code) { S.loginError = `${t("tSignIn
 onAuthStateChanged(auth, async u => {
   S.user = u; S.employees = null; S.users = null;
   if (u) {
-    try { await ensureProfile(u); }
+    try { await ensureProfile(u); if (role() !== "pending") await loadLibrary(); }
     catch (e) { console.error(e); S.profile = { role:"pending" }; toast(errMsg(e), "err"); }
   } else S.profile = null;
   S.authReady = true;
@@ -1751,4 +1951,4 @@ onAuthStateChanged(auth, async u => {
 });
 
 // Exposed for quick checks in the browser console
-window.GS = { recommendGrade, suggestLevel, LEVELS, FACTORS, DEPARTMENTS, I18N };
+window.GS = { recommendGrade, suggestLevel, levelFor, LEVELS, FACTORS, DEPARTMENTS, I18N };

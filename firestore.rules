@@ -15,6 +15,12 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Job title library (departments, titles, level overrides). Everyone signed in reads it; only Admin edits it.
+    match /departments/{code} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
     match /employees/{id} {
       allow read: if isHR() || (isManager() && resource.data.departmentId == me().departmentId);
       allow create: if isHR()
@@ -22,13 +28,29 @@ service cloud.firestore {
             && request.resource.data.departmentId == me().departmentId
             && request.resource.data.get("evaluation", null) == null
             && request.resource.data.status in ["draft", "submitted"]);
-      allow update: if isHR()
+      allow update: if isAdmin()
+        // HR: everything except giving the final approval (that is the department manager's step)
+        || (isHR()
+            && (request.resource.data.status != "approved"
+                || (resource.data.status == "approved"
+                    && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["evaluation", "managerApproval"]))))
+        // Manager: edit own department's profile while draft / returned (sections 1–11 only)
         || (isManager()
             && resource.data.departmentId == me().departmentId
             && request.resource.data.departmentId == me().departmentId
             && resource.data.status in ["draft", "returned"]
             && request.resource.data.status in ["draft", "submitted"]
-            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["evaluation"]));
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["evaluation", "managerApproval"]))
+        // Manager: approve the HR-proposed grade, or return it to HR
+        || (isManager()
+            && resource.data.departmentId == me().departmentId
+            && resource.data.status == "manager_approval"
+            && request.resource.data.status in ["approved", "under_evaluation"]
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "position", "managerApproval", "updatedAt", "updatedBy"])
+            && request.resource.data.position.diff(resource.data.position).affectedKeys().hasOnly(["currentGrade", "lastEvaluationDate"])
+            && request.resource.data.managerApproval.byUid == request.auth.uid
+            && (request.resource.data.status != "approved"
+                || request.resource.data.position.currentGrade == resource.data.evaluation.finalGrade));
       allow delete: if isAdmin();
     }
   }
