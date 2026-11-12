@@ -8,12 +8,12 @@ import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateD
    1) Firebase config (project: grade-system-new)
    ===================================================================== */
 const firebaseConfig = {
-  apiKey: "__API_KEY__",
+  apiKey: "AIzaSyD_vCK_LMIf0_LCA5vnQY8tnSxKK7tQiSs",
   authDomain: "grade-system-new.firebaseapp.com",
   projectId: "grade-system-new",
-  storageBucket: "grade-system-new.appspot.com",
-  messagingSenderId: "__SENDER_ID__",
-  appId: "__APP_ID__"
+  storageBucket: "grade-system-new.firebasestorage.app",
+  messagingSenderId: "568060782484",
+  appId: "1:568060782484:web:102132a61b4dc151cb9181"
 };
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
@@ -1487,7 +1487,9 @@ const xv = (def, v) => { const s = valueText(def, v); return s === undefined || 
 function uniqHeader(used, h) { let x = h, i = 2; while (used.has(x)) x = `${h} (${i++})`; used.add(x); return x; }
 function scopeList(list) { return isMgr() ? list.filter(e => e.departmentId === myDept()) : list; }
 const stamp = () => today();
-function sanitizeFile(s) { return String(s || "").replace(/[\\/:*?"<>|]+/g, "").trim() || "position"; }
+// File names: transliterate Azerbaijani letters (some browsers drop non-ASCII download names); file contents keep them.
+const TRANSLIT = { "ə":"e","Ə":"E","ş":"s","Ş":"S","ç":"c","Ç":"C","ğ":"g","Ğ":"G","ı":"i","İ":"I","ö":"o","Ö":"O","ü":"u","Ü":"U" };
+function sanitizeFile(s) { return String(s || "").replace(/[əƏşŞçÇğĞıİöÖüÜ]/g, c => TRANSLIT[c]).normalize("NFKD").replace(/[^\x20-\x7E]/g, "").replace(/[\\/:*?"<>|]+/g, "").trim() || "position"; }
 const H = (en, az) => S.lang === "en" ? en : az;
 
 function exportA(filters) {
