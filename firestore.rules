@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function signedIn() { return request.auth != null; }
+    function me() { return get(/databases/$(db)/documents/users/$(request.auth.uid)).data; }
+    function isAdmin() { return signedIn() && me().role == "admin"; }
+    function isHR() { return signedIn() && me().role in ["admin", "hr"]; }
+    function isManager() { return signedIn() && me().role == "manager"; }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == uid && request.resource.data.role == "pending";
+      allow update: if isAdmin()
+        || (request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["lang","theme","lastLogin","displayName","photoURL"]));
+      allow delete: if false;
+    }
+
+    match /employees/{id} {
+      allow read: if isHR() || (isManager() && resource.data.departmentId == me().departmentId);
+      allow create: if isHR()
+        || (isManager()
+            && request.resource.data.departmentId == me().departmentId
+            && request.resource.data.get("evaluation", null) == null
+            && request.resource.data.status in ["draft", "submitted"]);
+      allow update: if isHR()
+        || (isManager()
+            && resource.data.departmentId == me().departmentId
+            && request.resource.data.departmentId == me().departmentId
+            && resource.data.status in ["draft", "returned"]
+            && request.resource.data.status in ["draft", "submitted"]
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["evaluation"]));
+      allow delete: if isAdmin();
+    }
+  }
+}
