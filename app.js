@@ -2,7 +2,7 @@
 // Plain ES module, no build step. Firebase v10 modular SDK from the CDN, SheetJS as global XLSX.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, collection as fsCollection, doc as fsDoc, getDoc as fsGetDoc, getDocs as fsGetDocs, setDoc as fsSetDoc, addDoc as fsAddDoc, updateDoc as fsUpdateDoc, deleteDoc as fsDeleteDoc, query as fsQuery, where as fsWhere, serverTimestamp as fsServerTimestamp, writeBatch as fsWriteBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 /* =====================================================================
    1) Firebase config (project: grade-system-new)
@@ -18,6 +18,54 @@ const firebaseConfig = {
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
+
+/* ---------------------------------------------------------------------
+   Demo / open view: no sign-in, data lives only in this browser tab
+   (sessionStorage). Same functions as Firestore, so every screen works.
+   --------------------------------------------------------------------- */
+const DEMO = { on:false, db:null, uid:"demo-admin", tick:0 };
+class DTS { constructor(ms) { this.ms = ms; } toMillis() { return this.ms; } }
+const dclone = v => v instanceof DTS ? new DTS(v.ms) : Array.isArray(v) ? v.map(dclone) : (v && typeof v === "object") ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, dclone(x)])) : v;
+const demoNow = () => new DTS(Date.now() + (DEMO.tick++));
+function demoSave() {
+  try { sessionStorage.setItem("gs.demo", JSON.stringify({ db:DEMO.db, uid:DEMO.uid }, (k, v) => v instanceof DTS ? { __ts:v.ms } : v)); } catch {}
+}
+function demoLoad() {
+  try { const raw = sessionStorage.getItem("gs.demo"); if (!raw) return false;
+    const o = JSON.parse(raw, (k, v) => v && typeof v === "object" && "__ts" in v ? new DTS(v.__ts) : v);
+    DEMO.db = o.db; DEMO.uid = o.uid || "demo-admin"; return true; } catch { return false; }
+}
+function demoDenied() { const e = new Error("demo"); e.code = "permission-denied"; return e; }
+const collection = (d, name) => DEMO.on ? { name } : fsCollection(d, name);
+const doc = (d, col, id) => DEMO.on ? { col, id } : fsDoc(d, col, id);
+const where = (f, op, v) => DEMO.on ? { f, v } : fsWhere(f, op, v);
+const query = (c, ...w) => DEMO.on ? { name:c.name, w } : fsQuery(c, ...w);
+const serverTimestamp = () => DEMO.on ? demoNow() : fsServerTimestamp();
+async function getDocs(q) {
+  if (!DEMO.on) return fsGetDocs(q);
+  let rows = Object.entries(DEMO.db[q.name] || {});
+  (q.w || []).forEach(w => { rows = rows.filter(([, v]) => v[w.f] === w.v); });
+  return { docs:rows.map(([id, v]) => ({ id, data:() => dclone(v) })) };
+}
+async function getDoc(r) {
+  if (!DEMO.on) return fsGetDoc(r);
+  const v = DEMO.db[r.col]?.[r.id];
+  return { id:r.id, exists:() => !!v, data:() => dclone(v) };
+}
+async function setDoc(r, data) { if (!DEMO.on) return fsSetDoc(r, data); (DEMO.db[r.col] ??= {})[r.id] = dclone(data); demoSave(); }
+async function addDoc(c, data) { if (!DEMO.on) return fsAddDoc(c, data); const id = "demo" + Math.random().toString(36).slice(2, 10); await setDoc({ col:c.name, id }, data); return { id }; }
+async function updateDoc(r, data) {
+  if (!DEMO.on) return fsUpdateDoc(r, data);
+  const o = DEMO.db[r.col]?.[r.id]; if (!o) throw demoDenied();
+  for (const [k, v] of Object.entries(data)) { const ks = k.split("."); let a = o; ks.slice(0, -1).forEach(x => { a = (a[x] ??= {}); }); a[ks[ks.length - 1]] = dclone(v); }
+  demoSave();
+}
+async function deleteDoc(r) { if (!DEMO.on) return fsDeleteDoc(r); delete DEMO.db[r.col]?.[r.id]; demoSave(); }
+function writeBatch(d) {
+  if (!DEMO.on) return fsWriteBatch(d);
+  const ops = [];
+  return { set:(r, x) => ops.push(() => setDoc(r, x)), delete:r => ops.push(() => deleteDoc(r)), commit:async () => { for (const o of ops) await o(); } };
+}
 
 /* =====================================================================
    2) Static data: departments & job titles (spec 5E)
@@ -412,6 +460,11 @@ const STR = {
   tNameRequired:["Department names (AZ and EN) are required","Departament adları (AZ və EN) mütləqdir"],
   tDupTitle:["Duplicate title in the same department: {t}","Eyni departamentdə təkrar vəzifə: {t}"], tLibSaved:["Library saved","Kitabxana yadda saxlanıldı"],
   tMoved:["Moved to {d}","“{d}” departamentinə köçürüldü"], titlesHead:["Job titles","Vəzifə adları"],
+  openDemo:["Open demo — no sign-in needed","Demo-ya bax — giriş tələb olunmur"],
+  demoHint:["Explore every screen with sample data. Changes stay only in your browser.","Bütün ekranlara nümunə məlumatlarla baxın. Dəyişikliklər yalnız sizin brauzerinizdə qalır."],
+  demoBar:["DEMO — sample data, changes are not saved to the real database","DEMO — nümunə məlumatlar, dəyişikliklər real bazaya yazılmır"],
+  demoRole:["View as","Kim kimi baxmaq"], shareDemo:["Copy share link","Paylaşım linkini kopyala"], exitDemo:["Exit demo","Demodan çıx"],
+  resetDemo:["Reset demo","Demonu sıfırla"], tLinkCopied:["Link copied — send it to your colleagues","Link kopyalandı — həmkarlarınıza göndərin"], or:["or","və ya"],
   colSection:["Section","Bölmə"], colField:["Field","Sahə"], colValue:["Value","Dəyər"], general:["General","Ümumi"], no_:["No.","№"]
 };
 const I18N = { az:{}, en:{} };
@@ -574,6 +627,62 @@ const SAMPLE_DATA = [
      approvalStatus:"approved", evaluationDate:"2026-09-20", evaluatorName:"General Manager" } }
 ];
 
+const DEMO_USERS = [
+  ["demo-admin", "Demo Admin", "admin", null],
+  ["demo-hr", "Leyla Həsənova (HR)", "hr", null],
+  ["demo-fo", "Front Office meneceri", "manager", "FO"],
+  ["demo-hk", "Housekeeping meneceri", "manager", "HK"],
+  ["demo-rev", "Revenue meneceri", "manager", "REV"],
+  ["demo-kit", "Mətbəx meneceri", "manager", "KIT"],
+  ["demo-hrm", "HR departament meneceri", "manager", "HR"]
+];
+function demoSeed() {
+  const now = Date.now(), db = { users:{}, employees:{} };
+  DEMO_USERS.forEach(([uid, name, role, dep], i) => {
+    db.users[uid] = { uid, email:`${uid}@demo.local`, displayName:name, photoURL:"", role, departmentId:dep, lang:S.lang, theme:S.theme,
+      createdAt:new DTS(now - 86400000 * 30), lastLogin:new DTS(now - 3600000 * (i + 1)) };
+  });
+  SAMPLE_DATA.forEach((r, i) => {
+    const e = JSON.parse(JSON.stringify(r));
+    // Demo shows the new approval step: EMP-003 is waiting for the Revenue manager
+    if (e.employeeCode === "EMP-003") {
+      e.status = "manager_approval"; e.evaluation.finalGrade = "G6"; e.evaluation.approvalStatus = "manager_approval";
+      e.managerApproval = { decision:"pending", comment:"", byUid:"", byName:"", date:"", sentAt:"2026-11-10", sentBy:"Leyla Həsənova" };
+    }
+    db.employees["demo-" + e.employeeCode] = { ...e, createdBy:"demo-admin", updatedBy:"demo-admin", createdAt:new DTS(now - 86400000 * (10 - i)), updatedAt:new DTS(now - 3600000 * (10 - i)) };
+  });
+  return db;
+}
+function demoUser(uid) {
+  const u = DEMO.db.users[uid] || DEMO.db.users["demo-admin"];
+  return { uid:u.uid, email:u.email, displayName:u.displayName, photoURL:"" };
+}
+async function startDemo(resume = false) {
+  if (!resume || !demoLoad()) { DEMO.db = demoSeed(); DEMO.uid = "demo-admin"; }
+  DEMO.on = true; demoSave();
+  S.user = demoUser(DEMO.uid); S.profile = dclone(DEMO.db.users[S.user.uid]); S.employees = null; S.users = null;
+  await loadLibrary();
+  S.authReady = true;
+}
+async function switchDemoRole(uid) {
+  DEMO.uid = uid; demoSave();
+  S.user = demoUser(uid); S.profile = dclone(DEMO.db.users[uid]); S.employees = null; S.users = null; S.form = null; S.evalState = null; S.libEdit = null;
+  toast(`${t("demoRole")}: ${S.profile.displayName}`, "ok");
+  location.hash = "#/dashboard"; render();
+}
+function exitDemo() {
+  DEMO.on = false; DEMO.db = null; try { sessionStorage.removeItem("gs.demo"); } catch {}
+  S.user = auth.currentUser || null; S.profile = null; S.employees = null; S.users = null;
+  applyLibrary(clone(DEFAULT_DEPARTMENTS));
+  location.hash = "#/login"; if (S.user) ensureProfile(S.user).then(() => render()); else render();
+}
+const shareLink = () => `${location.origin}${location.pathname}#/demo`;
+async function copyShareLink() {
+  const url = shareLink();
+  try { await navigator.clipboard.writeText(url); toast(t("tLinkCopied"), "ok"); }
+  catch { window.prompt(t("shareDemo"), url); }
+}
+
 /* =====================================================================
    7) State & helpers
    ===================================================================== */
@@ -695,7 +804,7 @@ async function signIn() {
     render();
   }
 }
-async function doSignOut() { await signOut(auth); S.profile = null; S.employees = null; S.users = null; location.hash = "#/login"; }
+async function doSignOut() { if (DEMO.on) { exitDemo(); return; } await signOut(auth); S.profile = null; S.employees = null; S.users = null; location.hash = "#/login"; }
 
 async function loadLibrary() {
   try {
@@ -753,6 +862,10 @@ async function render() {
   const main = $("#main");
   if (!S.authReady) { main.innerHTML = `<div class="loading"><div class="spinner"></div><p>${t("loading")}</p></div>`; return; }
   const { path, params } = parseHash();
+  if (path === "#/demo") {
+    if (!DEMO.on) { main.innerHTML = `<div class="loading"><div class="spinner"></div><p>${t("loading")}</p></div>`; await startDemo(true); }
+    location.replace("#/dashboard"); return;
+  }
   if (!S.user) { if (path !== "#/login") { location.replace("#/login"); return; } }
   else if (role() === "pending") { if (path !== "#/pending") { location.replace("#/pending"); return; } }
   else if (path === "#/login" || path === "#/pending" || path === "#/" || path === "#") { location.replace("#/dashboard"); return; }
@@ -808,14 +921,27 @@ function renderHeader() {
           <div class="nm">${esc(p?.displayName || u.displayName || "")}</div>
           <div class="em">${esc(u.email || "")}</div>
           <div class="row" style="margin-bottom:12px"><span class="chip navy">${esc(L(ROLES[role()] || ROLES.pending))}</span>${myDept() ? `<span class="chip">${esc(deptName(myDept()))}</span>` : ""}</div>
-          <button class="btn btn-ghost btn-block" data-act="signout">${t("signOut")}</button>
+          <button class="btn btn-ghost btn-block" data-act="sharelink" style="margin-bottom:8px">🔗 ${t("shareDemo")}</button>
+          <button class="btn btn-ghost btn-block" data-act="signout">${DEMO.on ? t("exitDemo") : t("signOut")}</button>
         </div></div>` : ""}
     </div>
   </div>`;
+  renderDemoBar();
   $("#drawer").innerHTML = `<div class="drawer-head"><span class="brand"><span class="mono">GS</span><span class="brand-name">${esc(t("appName"))}</span></span>
     <button class="icon-btn" data-act="drawerclose" aria-label="${t("close")}">✕</button></div>
     ${items.map(([h, k]) => `<a href="${h}" class="${isActive(h) ? "active" : ""}">${t(k)}</a>`).join("")}
     ${u ? `<hr style="border:0;border-top:1px solid var(--border);width:100%"><a href="#" data-act="signout">${t("signOut")}</a>` : ""}`;
+}
+function renderDemoBar() {
+  const bar = $("#demoBar"); if (!bar) return;
+  if (!DEMO.on) { bar.hidden = true; bar.innerHTML = ""; return; }
+  bar.hidden = false;
+  bar.innerHTML = `<div class="demo-in"><b>${t("demoBar")}</b>
+    <label class="demo-role"><span>${t("demoRole")}:</span>
+      <select data-demorole="1" aria-label="${t("demoRole")}">${DEMO_USERS.map(([uid, name, r, dep]) => `<option value="${uid}" ${uid === DEMO.uid ? "selected" : ""}>${esc(L(ROLES[r]))}${dep ? " · " + esc(dep) : ""} — ${esc(name)}</option>`).join("")}</select></label>
+    <button class="btn btn-ghost" data-act="sharelink">🔗 ${t("shareDemo")}</button>
+    <button class="btn btn-ghost" data-act="demoreset">${t("resetDemo")}</button>
+    <button class="btn btn-ghost" data-act="signout">${t("exitDemo")}</button></div>`;
 }
 function openDrawer() { $("#drawer").hidden = false; $("#drawerBackdrop").hidden = false; $(".menu-btn")?.setAttribute("aria-expanded", "true"); $("#drawer a")?.focus(); }
 function closeDrawer() { $("#drawer").hidden = true; $("#drawerBackdrop").hidden = true; $(".menu-btn")?.setAttribute("aria-expanded", "false"); }
@@ -833,6 +959,10 @@ function scrLogin() {
       <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
       ${t("signInGoogle")}</button>
     <div role="alert" aria-live="assertive">${S.loginError ? `<div class="err">${esc(S.loginError)}</div>` : ""}</div>
+    <div class="or-line"><span>${t("or")}</span></div>
+    <a class="btn btn-secondary btn-block" href="#/demo">${t("openDemo")}</a>
+    <p class="small muted" style="margin-top:8px">${t("demoHint")}</p>
+    <button class="btn btn-ghost btn-block" data-act="sharelink" style="margin-top:8px">🔗 ${t("shareDemo")}</button>
   </div></div>`;
 }
 // S2 — Pending
@@ -1821,6 +1951,8 @@ document.addEventListener("click", async ev => {
     case "evapprove": saveEval("approve"); break;
     case "evsend": saveEval("send"); break;
     case "libedit": startLibEdit(); break;
+    case "sharelink": copyShareLink(); break;
+    case "demoreset": if (await confirmDlg(t("resetDemo") + "?")) { await startDemo(false); location.hash = "#/dashboard"; render(); } break;
     case "libcancel": S.libEdit = null; render(); break;
     case "libsave": saveLibrary(); break;
     case "libadddept": S.libEdit.push({ code:"", en:"", az:"", descEn:"", descAz:"", isNew:true, rows:[] }); S.libDept = "";
@@ -1886,6 +2018,7 @@ document.addEventListener("change", e => {
     return;
   }
   if (S.libEdit && el.dataset.le) { syncLibChips(); return; }
+  if (el.dataset.demorole) { switchDemoRole(el.value); return; }
   if (el.dataset.urole) { saveUser(el.dataset.urole, { role:el.value }); return; }
   if (el.dataset.udept) { saveUser(el.dataset.udept, { departmentId:el.value || null }); return; }
   if (!S.form) return;
@@ -1938,9 +2071,12 @@ window.addEventListener("hashchange", () => {
 /* =====================================================================
    13) Boot
    ===================================================================== */
-applyTheme(); applyStatic(); render();
+applyTheme(); applyStatic();
+let hasDemo = false; try { hasDemo = !!sessionStorage.getItem("gs.demo"); } catch {}
+if (hasDemo) { startDemo(true).then(() => render()); } else render();
 getRedirectResult(auth).catch(e => { if (e?.code) { S.loginError = `${t("tSignInFailed")}: ${e.code}`; render(); } });
 onAuthStateChanged(auth, async u => {
+  if (DEMO.on) return;  // demo session has its own user
   S.user = u; S.employees = null; S.users = null;
   if (u) {
     try { await ensureProfile(u); if (role() !== "pending") await loadLibrary(); }
