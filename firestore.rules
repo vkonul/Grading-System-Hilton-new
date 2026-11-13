@@ -55,6 +55,18 @@ service cloud.firestore {
       allow write: if isStaffHR();
     }
 
+    // Employee database, loaded from the HR Excel file. Managers read their own department.
+    match /people/{code} {
+      allow read: if isStaffHR() || (isManager() && resource.data.departmentId == me().departmentId);
+      allow write: if isStaffHR();
+    }
+
+    // Settings such as salary ranges: everyone signed in reads, only Admin writes
+    match /settings/{id} {
+      allow read: if isActive();
+      allow write: if isAdmin();
+    }
+
     // Job title library. Everyone signed in reads it; only Admin edits it.
     match /departments/{code} {
       allow read: if signedIn();

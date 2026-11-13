@@ -35,18 +35,15 @@ Lokal işə salmaq: istənilən statik server, məsələn `npx serve .` və ya V
 | Departament meneceri | Yalnız öz departamenti, 1–11-ci bölmələr + menecer qiymətləndirməsi (12A), HR-a göndərmə |
 | Gözləmədə | "Rol gözlənilir" ekranı |
 
-## Proses (status axını)
-```
-Qaralama ──(Menecer profili doldurur + 9 faktoru ballayır, göndərir)──► Göndərilib
-   ──(HR müstəqil ballayır, menecerin ballarını sonra görür, kalibrasiya)──► HR direktorunun təsdiqində
-   ──(HR direktoru / HR meneceri təsdiqləyir)──► Təsdiqlənib
-HR profili natamam görsə ─► Qaytarılıb ─► Menecer düzəldib yenidən göndərir
-HR direktoru şərhlə qaytarsa ─► Qiymətləndirilir (HR yenidən baxır)
-```
-**Qərəzsizlik tədbirləri:** müstəqil və “kor” qiymətləndirmə; menecer və HR arasında böyük fərq olduqda kalibrasiya qeydi; hər balın konkret tərifi (bal şkalası);
-profildən avtomatik tövsiyə olunan bal (2+ fərq olduqda əsaslandırma mütləqdir); qiymətləndirmə ekranında işçinin adı gizlədilir; maraqlar toqquşması
-(öz vəzifəsini qiymətləndirmək / təsdiqləmək olmaz — “İşçinin e-poçtu” sahəsi ilə yoxlanılır); 4 göz prinsipi (qiymətləndirən təsdiqləyə bilməz);
-oxşar vəzifələrlə müqayisə; qiymətləndirici statistikası (Hesabatlar); tam tarixçə.
+## Proses
+1. **İşçi bazası** — HR/Admin "İşçilər" bölməsində Excel şablonunu yükləyir, doldurur və geri yükləyir (kod, ad, departament, vəzifə, təhsil, təcrübə…).
+2. **Menecer "Grade ver"** — komandasından işçini seçir; işçi və vəzifə məlumatları (təlimat, KPI-lar, tələblər) avtomatik doldurulur, menecer yalnız 9 faktoru ballayır.
+3. **Sistem yoxlaması** — profildən 2+ fərqli bal, səviyyə aralığından kənar dərəcə, 9 eyni bal, eyni vəzifədən fərqli dərəcə avtomatik işarələnir.
+4. **HR yoxlaması** — təmiz hallar bir kliklə təsdiqlənir; işarələnmişlərdə HR balı yazılı səbəblə düzəldə bilər və ya menecerə qaytarır.
+5. **HR direktoru** yekun təsdiq verir (4 göz prinsipi, öz vəzifəsini təsdiqləyə bilməz).
+6. **Fərdi dərəcə və maaş** — işçinin ixtisası vəzifə tələbləri ilə müqayisə olunur; dərəcənin maaş aralığı (min–orta–maks, Admin dəyişir) və fərdi zona göstərilir.
+
+Hesabatlar: A xülasə, B tam profillər, C tək vəzifə, D tarixçə, E statistika, F maaş aralıqları — hamısı önizləmə və Excel ilə.
 
 ## E-poçt bildirişləri (Outlook / Microsoft 365)
 Hər addımda növbəti şəxsin Outlook ünvanına məktub `mail` kolleksiyasına növbəyə yazılır. Göndərmək üçün bir dəfə:

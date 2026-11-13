@@ -378,7 +378,7 @@ const EVAL_FIELDS = [
   ["evaluationDate","Evaluation Date","Qiymətləndirmə tarixi","date"],
   ["evaluatorName","Evaluator","Qiymətləndirici","text"]
 ];
-const PERSIST_KEYS = ["employeeCode","fullName","hireDate","employeeEmail","departmentId","status","returnComment","managerEvaluation","standard","kpiExtra","qualifications", ...SECTIONS.map(s => s.key), "evaluation"];
+const PERSIST_KEYS = ["personCode","employeeCode","fullName","hireDate","employeeEmail","departmentId","status","returnComment","managerEvaluation","standard","kpiExtra","qualifications", ...SECTIONS.map(s => s.key), "evaluation"];
 
 /* =====================================================================
    5) i18n — { az:{...}, en:{...} }
@@ -494,7 +494,7 @@ const STR = {
   mgrEvaluation:["Manager evaluation","Menecerin qiymətləndirməsi"], hrEvaluation:["HR evaluation","HR qiymətləndirməsi"],
   mgrEvalSub:["Step 1 — the department manager scores the 9 factors before sending to HR","1-ci addım — departament meneceri HR-a göndərməzdən əvvəl 9 faktoru ballayır"],
   hrEvalSub:["Step 2 — HR scores independently; Step 3 — HR Director approves","2-ci addım — HR müstəqil ballayır; 3-cü addım — HR direktoru təsdiqləyir"],
-  mgrScore:["Manager","Menecer"], hrScore:["HR","HR"], gap:["Gap (HR−M)","Fərq (HR−M)"], factor:["Factor","Faktor"],
+  mgrScore:["Manager","Menecer"], hrScore:["After HR review","HR yoxlamasından sonra"], gap:["Gap (HR−M)","Fərq (HR−M)"], factor:["Factor","Faktor"],
   profileHint:["Profile","Profil"], hintTitle:["Score suggested by the facts in the job profile","Vəzifə profilindəki faktlara əsasən tövsiyə olunan bal"],
   pickScore:["Choose a score — each level has a definition","Bal seçin — hər səviyyənin tərifi var"], scaleGuide:["Scoring guide","Bal şkalası"],
   justify:["Justification","Əsaslandırma"], justifyHint:["Your score ({v}) differs from the profile ({h}) by 2+ points — explain why","Balınız ({v}) profildən ({h}) 2+ bal fərqlənir — səbəbini izah edin"],
@@ -514,8 +514,8 @@ const STR = {
   nameHidden:["The employee's name is hidden — the job is evaluated, not the person","İşçinin adı gizlədilib — şəxs deyil, vəzifə qiymətləndirilir"],
   consistency:["Similar positions","Oxşar vəzifələr"], noSimilar:["No graded positions with the same title yet","Eyni adlı qiymətləndirilmiş vəzifə hələ yoxdur"],
   outlierWarn:["This grade differs by 2+ grades from the same title elsewhere","Bu dərəcə digər eyni adlı vəzifələrdən 2+ dərəcə fərqlənir"],
-  history:["History","Tarixçə"], h_created:["Created","Yaradıldı"], h_saved:["Saved","Yadda saxlanıldı"], h_submitted:["Manager scored and sent to HR","Menecer balladı və HR-a göndərdi"],
-  h_returned_to_manager:["Returned to manager","Menecerə qaytarıldı"], h_hr_saved:["HR saved scores","HR balları yadda saxladı"], h_sent_to_director:["Sent to HR Director","HR direktoruna göndərildi"],
+  history:["History","Tarixçə"], h_created:["Created","Yaradıldı"], h_saved:["Saved","Yadda saxlanıldı"], h_submitted:["Manager graded and sent to HR","Menecer qiymətləndirdi və HR-a göndərdi"],
+  h_returned_to_manager:["Returned to manager","Menecerə qaytarıldı"], h_hr_saved:["HR review saved","HR yoxlaması yadda saxlanıldı"], h_sent_to_director:["Sent to HR Director","HR direktoruna göndərildi"],
   h_approved:["Approved","Təsdiqləndi"], h_returned_to_hr:["Returned to HR","HR-a qaytarıldı"], h_edited:["Profile edited","Profil redaktə edildi"],
   dec_approved:["Approved","Təsdiqləndi"], dec_returned:["Returned to HR","HR-a qaytarıldı"], dec_pending:["Pending","Gözləyir"],
   confirmMgrApprove:["Approve grade {g} for this position?","Bu vəzifə üçün {g} dərəcəsi təsdiqlənsin?"],
@@ -556,6 +556,51 @@ const STR = {
   noJobGrade:["The individual grade is calculated after the job grade is approved","Fərdi dərəcə vəzifə dərəcəsi təsdiqləndikdən sonra hesablanır"],
   preview:["Preview","Önizləmə"], previewBtn:["👁 Preview","👁 Önizlə"], download:["Download .xlsx","Excel-i yüklə"],
   signedInAs:["Signed in as","Daxil olmusunuz:"], continueApp:["Continue to the app","Sistemə keç"], continueDemo:["Continue the demo","Demoya davam et"],
+  navHome:["Home","Ana səhifə"], navReview:["HR review","HR yoxlaması"], gradeBtn:["Grade an employee","Grade ver"], education:["Education","Təhsil"], open:["Open","Aç"],
+  hello:["Hello","Salam"], homeTodo:["What needs your attention","Nə etməlisiniz"], homeAdmin:["Administration","İdarəetmə"], howItWorks:["How it works","Necə işləyir"],
+  homeGradeText:["{n} employee(s) in your team are not graded yet","Komandanızda {n} işçi hələ qiymətləndirilməyib"], homeDrafts:["Drafts","Qaralamalar"], homeReturned:["Returned to you for changes","Düzəliş üçün sizə qaytarılanlar"],
+  homeReview:["Waiting for HR review","HR yoxlaması gözləyənlər"], homeReviewText:["{n} position(s) · {f} flagged by the system","{n} vəzifə · {f} sistem tərəfindən işarələnib"],
+  homeApprove:["Waiting for final approval","Yekun təsdiq gözləyənlər"], homeApproveText:["{n} position(s) need your decision","{n} vəzifə qərarınızı gözləyir"],
+  homeInProgress:["In progress (HR / Director)","Prosesdə (HR / direktor)"], homeApproved:["Approved positions","Təsdiqlənmiş vəzifələr"],
+  step1:["Manager grades","Menecer qiymətləndirir"], step1d:["Picks an employee and scores 9 factors — job and employee data are pre-filled","İşçini seçir və 9 faktoru ballayır — vəzifə və işçi məlumatları hazırdır"],
+  step2:["System checks","Sistem yoxlayır"], step2d:["Unusual scores are flagged automatically","Qeyri-adi ballar avtomatik işarələnir"],
+  step3:["HR reviews","HR yoxlayır"], step3d:["Clean cases pass in one click; flagged ones are corrected with a reason","Təmiz hallar bir kliklə keçir; işarələnmişlər səbəblə düzəldilir"],
+  step4:["HR Director approves","HR direktoru təsdiqləyir"], step4d:["Job grade, individual grade and salary range are final","Vəzifə dərəcəsi, fərdi dərəcə və maaş aralığı yekunlaşır"],
+  gradeListSub:["Choose an employee from your team. Their data comes from the HR employee file.","Komandanızdan işçi seçin. Məlumatlar HR-ın işçi faylından gəlir."], gradeSearchPh:["Name, code or job title","Ad, kod və ya vəzifə"],
+  noPeople:["The employee list is empty","İşçi siyahısı boşdur"], noPeopleHint:["HR uploads the employee Excel file in Employees.","HR “İşçilər” bölməsində Excel faylını yükləməlidir."], notGraded:["Not graded","Qiymətləndirilməyib"],
+  empData:["Employee data","İşçi məlumatları"], empDataNote:["From the HR employee file — not edited here. Ask HR if something is wrong.","HR-ın işçi faylından gəlir — burada dəyişdirilmir. Səhv varsa HR-a bildirin."],
+  jobData:["Position","Vəzifə"], jdShow:["Job description ({n} responsibilities)","Vəzifə təlimatı ({n} öhdəlik)"], editProfileOpt:["Edit the full job profile (optional)","Vəzifə profilini ətraflı redaktə et (istəyə bağlı)"],
+  gradeFactors:["Score the 9 factors","9 faktoru ballayın"], gradeFactorsSub:["Tap 1–5 for each factor. Each level has a written definition.","Hər faktor üçün 1–5 seçin. Hər səviyyənin yazılı tərifi var."],
+  sendToHR:["Send to HR","HR-a göndər"],
+  flDev:["{f}: score {v} vs profile {h}","{f}: bal {v}, profil {h}"], flRange:["Grade {g} is outside the level range {r}","{g} dərəcəsi səviyyə aralığından ({r}) kənardadır"],
+  flSame:["All 9 factors scored {v}","9 faktorun hamısı {v} ballanıb"], flOutlier:["{g} differs from the same title elsewhere","{g} başqa yerdəki eyni vəzifədən fərqlənir"], flIncomplete:["Manager scores incomplete","Menecer balları natamamdır"],
+  reviewSub:["Flagged positions are listed first. Clean ones can be confirmed in one click.","İşarələnmiş vəzifələr əvvəldədir. Təmiz olanları bir kliklə təsdiqləmək olar."],
+  noFlags:["No issues found","Problem tapılmadı"], noFlagsHint:["You can confirm the manager's scores and send them to the HR Director.","Menecerin ballarını təsdiqləyib HR direktoruna göndərə bilərsiniz."],
+  quickOk:["Confirm & send","Təsdiqlə və göndər"], reviewBtn:["Review","Yoxla"], reviewEmpty:["Nothing is waiting for HR review","HR yoxlaması gözləyən vəzifə yoxdur"],
+  quickOkConfirm:["Confirm the manager's scores and send grade {g} to the HR Director?","Menecerin balları təsdiqlənsin və {g} dərəcəsi HR direktoruna göndərilsin?"],
+  hrReview:["HR review","HR yoxlaması"], flagsTitle:["{n} point(s) to check","{n} yoxlanılmalı məqam"], hrReviewCol:["After HR review","HR yoxlamasından sonra"],
+  reasonReq:["Reason (required)","Səbəb (mütləq)"], tNeedAdjReason:["Write a reason for every changed score","Dəyişdirilən hər bal üçün səbəb yazın"], adjCount:["change(s)","dəyişiklik"],
+  hrAdjusted:["HR adjusted these scores","HR bu balları düzəltdi"],
+  repCDesc2:["Choose a position and export its full job description, scores and history.","Vəzifəni seçin və tam təlimatını, ballarını və tarixçəsini ixrac edin."],
+  histTitle:["History","Tarixçə"], histDesc:["Every step of every position: who did what and when.","Hər vəzifənin bütün addımları: kim, nə vaxt, nə edib."],
+  statsTitle:["Statistics","Statistika"], statsDesc:["Counts by status, grade distribution and manager scoring patterns.","Status üzrə saylar, dərəcə bölgüsü və menecerlərin ballama meylləri."],
+  salaryTitle:["Salary ranges","Maaş aralıqları"], salaryDesc:["Minimum, midpoint and maximum pay for each grade.","Hər dərəcə üçün minimum, orta və maksimum maaş."],
+  salarySub:["Monthly gross pay range for every grade. Midpoint is calculated automatically.","Hər dərəcə üçün aylıq gross maaş aralığı. Orta nöqtə avtomatik hesablanır."],
+  sMin:["Minimum","Minimum"], sMid:["Midpoint","Orta"], sMax:["Maximum","Maksimum"], sLevels:["Typical levels","Uyğun səviyyələr"], sCurrency:["Currency","Valyuta"],
+  salaryNote:["Only Admin can change the ranges. Everyone can see them.","Aralıqları yalnız Admin dəyişə bilər. Hamı görə bilər."], tBandInvalid:["Check the range of {g}: minimum must be lower than maximum","{g} aralığını yoxlayın: minimum maksimumdan az olmalıdır"],
+  salaryCol:["Salary range","Maaş aralığı"], salaryZone:["Individual pay zone","Fərdi maaş zonası"],
+  peopleTitle:["Employees","İşçilər"], peopleSub:["The employee list comes from one Excel file. Managers pick employees from it when grading.","İşçi siyahısı bir Excel faylından gəlir. Menecerlər qiymətləndirmədə bu siyahıdan seçir."],
+  peopleImport:["Upload the employee Excel file","İşçi Excel faylını yüklə"], peopleStep1:["Download the template","Şablonu yükləyin"],
+  peopleStep2:["Fill one row per employee (code, name, department, job title, education, experience…)","Hər işçi üçün bir sətir doldurun (kod, ad, departament, vəzifə, təhsil, təcrübə…)"],
+  peopleStep3:["Choose the file, check the result and import","Faylı seçin, nəticəni yoxlayın və idxal edin"],
+  peopleTpl:["Download template","Şablonu yüklə"], peopleChoose:["Choose Excel file","Excel faylını seç"], peopleCheck:["{ok} row(s) ready, {bad} with errors","{ok} sətir hazırdır, {bad} sətirdə xəta var"],
+  line:["Row","Sətir"], peopleDo:["Import {n} employee(s)","{n} işçini idxal et"], peopleList:["Employee list","İşçi siyahısı"], peopleEmpty:["No employees yet — upload the Excel file above.","Hələ işçi yoxdur — yuxarıda Excel faylını yükləyin."],
+  peopleOverwrite:["Employees with the same code are updated.","Eyni kodlu işçilərin məlumatı yenilənəcək."], tPeopleDone:["{n} employee(s) imported","{n} işçi idxal edildi"],
+  peopleSheet:["Employees","İşçilər"], helpSheet:["Codes","Kodlar"],
+  errCode:["missing or invalid code","kod yoxdur və ya yanlışdır"], errDupCode:["duplicate code","təkrar kod"], errName:["missing name","ad yoxdur"], errDept:["unknown department","departament tanınmadı"],
+  errTitle:["missing job title","vəzifə yoxdur"], errEdu:["unknown education","təhsil tanınmadı"], errExp:["missing experience","təcrübə yoxdur"],
+  libSearchPh:["Search all job titles","Bütün vəzifələrdə axtar"], evalStatsDesc2:["How each manager scores compared with the job profile, and how often HR had to adjust.","Hər menecerin ballarının vəzifə profili ilə müqayisəsi və HR-ın nə qədər düzəliş etdiyi."],
+  stAdj:["HR adjustments","HR düzəlişləri"], stFlagged:["Flagged","İşarələnmiş"],
   colSection:["Section","Bölmə"], colField:["Field","Sahə"], colValue:["Value","Dəyər"], general:["General","Ümumi"], no_:["No.","№"]
 };
 const I18N = { az:{}, en:{} };
@@ -743,13 +788,16 @@ function demoSeed() {
     mainObjectives:"Short queue times, accurate billing, high guest satisfaction.",
     responsibilities:[...fdaFixed.map(r => ({ ...r, fixed:true })), { task:"Upsell rooms and services", description:"Offer upgrades, breakfast and late check-out.", frequency:"daily", level:"support", outcomes:"Extra room revenue", kpis:"Upsell revenue per month", accountability:"low", fixed:false }],
     fixedItems:fdaFixed, knowledge:{ minEducation:"vocational", experienceYears:1, languages:"Azerbaijani, English", softwareSystems:"Opera PMS" }, updatedByName:"Leyla Həsənova" } };
+  db.people = Object.fromEntries(samplePeople().map(p => [p.code, p]));
   db.directory = Object.fromEntries(Object.values(db.users).map(u => [u.uid, { uid:u.uid, displayName:u.displayName, email:u.email, notifyEmail:u.notifyEmail, role:u.role, departmentId:u.departmentId }]));
   db.mail = {};
   sampleRecords().forEach((e, i) => {
     // Demo shows the full flow: EMP-003 was scored by both sides (with a calibration flag) and waits for the HR Director
     if (e.employeeCode === "EMP-003") {
       e.status = "director_approval"; e.evaluation.finalGrade = "G6"; e.evaluation.approvalStatus = "director_approval";
-      e.evaluation.evaluatorUid = "demo-hr"; e.evaluation.evaluatorName = "Aynur Rzayeva (HR)"; e.evaluation.blindScores = { ...e.evaluation.scores }; e.evaluation.changedAfterReveal = [];
+      e.evaluation.evaluatorUid = "demo-hr"; e.evaluation.evaluatorName = "Aynur Rzayeva (HR)"; e.evaluation.review = true;
+      e.evaluation.adjustments = { leadership:{ from:5, to:3, reason:"1 direct report — leadership 3 matches the profile" }, businessImpact:{ from:5, to:4, reason:"Impact is on rooms revenue, not hotel-wide" } };
+      e.evaluation.flags = ["Leadership: score 5 vs profile 3"]; e.evaluation.managerTotal = 35;
       e.managerEvaluation.evaluatorUid = "demo-rev"; e.managerEvaluation.evaluatorName = "Revenue meneceri";
       e.history.push({ at:"2026-11-03T10:00:00.000Z", byName:"Revenue meneceri", role:"manager", action:"submitted", note:"35/45" },
                      { at:"2026-11-10T15:30:00.000Z", byName:"Aynur Rzayeva (HR)", role:"hr", action:"sent_to_director", note:"32/45 · G6 · ⚠" });
@@ -768,14 +816,14 @@ async function startDemo(resume = false) {
   if (!resume || !demoLoad()) { DEMO.db = demoSeed(); DEMO.uid = "demo-admin"; }
   DEMO.on = true; demoSave();
   S.user = demoUser(DEMO.uid); S.profile = dclone(DEMO.db.users[S.user.uid]); S.employees = null; S.users = null;
-  await loadLibrary(); await loadJobTemplates();
+  await loadLibrary(); await loadJobTemplates(); await loadSalaryBands();
   S.authReady = true;
 }
 async function switchDemoRole(uid) {
   DEMO.uid = uid; demoSave();
-  S.user = demoUser(uid); S.profile = dclone(DEMO.db.users[uid]); S.employees = null; S.users = null; S.form = null; S.evalState = null; S.libEdit = null;
+  S.user = demoUser(uid); S.profile = dclone(DEMO.db.users[uid]); S.employees = null; S.users = null; S.people = null; S.form = null; S.evalState = null; S.libEdit = null;
   toast(`${t("demoRole")}: ${S.profile.displayName}`, "ok");
-  location.hash = "#/dashboard"; render();
+  location.hash = "#/home"; render();
 }
 function exitDemo() {
   DEMO.on = false; DEMO.db = null; try { sessionStorage.removeItem("gs.demo"); } catch {}
@@ -814,11 +862,29 @@ const SAMPLE_QUAL = {
   "EMP-004":{ education:"vocational", fieldOfStudy:"Culinary arts", experienceYears:16, hospitalityYears:16, certificationsHeld:"HACCP", languagesSpoken:"Azerbaijani, English" },
   "EMP-005":{ education:"master", fieldOfStudy:"Human Resource Management", experienceYears:12, hospitalityYears:9, certificationsHeld:"CIPD Level 7", languagesSpoken:"Azerbaijani, English, Russian" }
 };
+const EXTRA_PEOPLE = [
+  ["EMP-006", "Günel Rzayeva", "FO", "Front Desk Agent", "2024-05-02", "bachelor", "Tourism", 2, 2, "", "Azerbaijani, English, Russian"],
+  ["EMP-007", "Kamran Məlikov", "FO", "Receptionist", "2025-01-15", "vocational", "Hospitality", 1, 1, "", "Azerbaijani, English"],
+  ["EMP-008", "Səbinə Quliyeva", "FO", "Guest Relations Officer", "2021-03-01", "bachelor", "Linguistics", 4, 4, "", "Azerbaijani, English, Turkish"],
+  ["EMP-009", "Orxan Nəsirov", "HK", "Room Attendant", "2023-07-10", "secondary", "", 2, 2, "", "Azerbaijani"],
+  ["EMP-010", "Lalə Kərimova", "HK", "Floor Supervisor", "2020-02-17", "vocational", "Hospitality", 5, 5, "", "Azerbaijani, Russian"],
+  ["EMP-011", "Tural Hüseynov", "KIT", "Commis Chef", "2025-03-03", "vocational", "Culinary arts", 1, 1, "HACCP basics", "Azerbaijani"],
+  ["EMP-012", "Fidan Əhmədova", "REV", "Reservations Agent", "2024-09-09", "bachelor", "Economics", 1, 1, "", "Azerbaijani, English"],
+  ["EMP-013", "Ramil Səfərov", "FB", "Waiter / Waitress", "2022-06-20", "secondary", "", 3, 3, "", "Azerbaijani, English"],
+  ["EMP-014", "Aytən Bağırova", "HR", "Training Officer", "2023-11-01", "master", "Psychology", 3, 2, "", "Azerbaijani, English, Russian"]];
+function samplePeople() {
+  const base = SAMPLE_DATA.map(r => { const q = SAMPLE_QUAL[r.employeeCode] || {};
+    return { code:r.employeeCode, fullName:r.fullName, email:SAMPLE_EXTRA[r.employeeCode]?.employeeEmail || "", departmentId:r.departmentId, jobTitle:r.position.jobTitle, hireDate:r.hireDate,
+      education:q.education || "", fieldOfStudy:q.fieldOfStudy || "", experienceYears:q.experienceYears ?? "", hospitalityYears:q.hospitalityYears ?? "", certifications:q.certificationsHeld || "", languages:q.languagesSpoken || "" }; });
+  return [...base, ...EXTRA_PEOPLE.map(([code, fullName, departmentId, jobTitle, hireDate, education, fieldOfStudy, experienceYears, hospitalityYears, certifications, languages]) =>
+    ({ code, fullName, email:"", departmentId, jobTitle, hireDate, education, fieldOfStudy, experienceYears, hospitalityYears, certifications, languages }))];
+}
 function sampleRecords() {
   return SAMPLE_DATA.map(r => {
     const e = JSON.parse(JSON.stringify(r)), x = SAMPLE_EXTRA[e.employeeCode] || {};
     if (x.managerEvaluation) e.managerEvaluation = JSON.parse(JSON.stringify(x.managerEvaluation));
     if (SAMPLE_QUAL[e.employeeCode]) e.qualifications = { ...SAMPLE_QUAL[e.employeeCode], notes:"" };
+    e.personCode = e.employeeCode;
     if (x.finalApproval) e.finalApproval = { ...x.finalApproval };
     if (x.employeeEmail) e.employeeEmail = x.employeeEmail;
     if (e.evaluation && x.evaluationExtra) Object.assign(e.evaluation, x.evaluationExtra);
@@ -998,6 +1064,7 @@ function personalFitHTML(e) {
       ${row(esc(fl(SECTIONS[3].fields[8])), req.certifications, q.certificationsHeld)}
       ${row(esc(fl(SECTIONS[3].fields[7])), req.languages, q.languagesSpoken)}</tbody></table></div>
     ${f.reasons.length ? `<p class="small" style="margin-top:8px">${f.reasons.map(r => "• " + t(r)).join("<br>")}</p>` : ""}
+    ${jg && personalZone(e) ? `<p class="small"><b>💰 ${t("salaryZone")}:</b> ${esc(personalZone(e))} <span class="muted">(${t("salaryCol")} ${esc(personalGradeOf(e).replace("+", ""))}: ${esc(bandText(personalGradeOf(e)))})</span></p>` : ""}
     <p class="small muted">${jg ? t("fitRule") : t("noJobGrade")}</p>
     ${pg?.grade ? `<p class="small"><b>${t("pgOverride")}:</b> ${esc(pg.grade)} — ${esc(pg.reason || "")} <span class="muted">(${esc(pg.byName || "")}, ${esc(pg.date || "")})</span></p>` : ""}
     ${isHR() && jg ? `<div class="row" style="align-items:flex-end;margin-top:10px">
@@ -1024,9 +1091,7 @@ function standardHTML(d) {
     <p class="small muted" style="margin:6px 0 12px">${t("stdInfo")}</p>
     ${st.items.map((r, i) => `<div class="resp std"><div class="resp-h"><b>${i + 1}. ${esc(r.task)}</b><span class="row">
         ${r.frequency ? `<span class="chip">${esc(optLabel("freq", r.frequency))}</span>` : ""}${r.level ? `<span class="chip navy">${esc(optLabel("respLevel", r.level))}</span>` : ""}</span></div>
-      ${r.description ? `<p class="small" style="margin:0 0 8px">${esc(r.description)}</p>` : ""}
-      <div class="kv"><div><div class="k">${esc(fl(SECTIONS[2].fields[4]))}</div><div class="v">${esc(r.outcomes || "—")}</div></div>
-        <div><div class="k">🔒 ${esc(fl(SECTIONS[2].fields[5]))}</div><div class="v">${esc(r.kpis || "—")}</div></div></div>
+      <div class="small"><span class="k">🔒 KPI:</span> ${esc(r.kpis || "—")}</div>
       <div class="field" style="margin-top:10px"><label for="f-kpiExtra-${i}">${t("kpiExtra")}</label><textarea id="f-kpiExtra-${i}" data-kpiextra="${i}">${esc(d.kpiExtra?.[i] || "")}</textarea>
         <span class="hint">${t("kpiExtraHint")}</span></div></div>`).join("")}</div>
     <div class="label-caps" style="margin:16px 0 8px">${t("customResp")}</div>`;
@@ -1097,7 +1162,15 @@ const sortByUpdated = list => list.slice().sort((a, b) => tsMs(b.updatedAt) - ts
 const ROUTES = [
   [/^#\/login$/, scrLogin, "public"],
   [/^#\/pending$/, scrPending, "pending"],
-  [/^#\/dashboard$/, scrDashboard],
+  [/^#\/home$/, scrHome],
+  [/^#\/dashboard$/, scrHome],
+  [/^#\/grade$/, scrGradeList],
+  [/^#\/grade\/(.+)$/, scrGrade],
+  [/^#\/review$/, scrReviewQueue],
+  [/^#\/salary$/, scrSalary],
+  [/^#\/reports\/stats$/, scrStats],
+  [/^#\/reports\/history$/, scrHistory],
+  [/^#\/admin\/people$/, scrPeople],
   [/^#\/positions$/, scrPositions],
   [/^#\/positions\/new$/, scrForm],
   [/^#\/positions\/([^/]+)\/edit$/, scrForm],
@@ -1123,15 +1196,15 @@ async function render() {
   const { path, params } = parseHash();
   if (path === "#/demo") {
     if (!DEMO.on) { main.innerHTML = `<div class="loading"><div class="spinner"></div><p>${t("loading")}</p></div>`; await startDemo(true); }
-    location.replace("#/dashboard"); return;
+    location.replace("#/home"); return;
   }
   if (!S.user) { if (path !== "#/login") { location.replace("#/login"); return; } }
   else if (role() === "pending") { if (path !== "#/pending" && path !== "#/login") { location.replace("#/pending"); return; } }
-  else if (path === "#/pending" || path === "#/" || path === "#") { location.replace("#/dashboard"); return; }
+  else if (path === "#/pending" || path === "#/" || path === "#") { location.replace("#/home"); return; }
   let hit = null, m = null;
   for (const r of ROUTES) { m = path.match(r[0]); if (m) { hit = r; break; } }
-  if (!hit) { location.replace(S.user ? "#/dashboard" : "#/login"); return; }
-  if (hit[2] === "admin" && !isAdmin()) { toast(t("tAdminOnly"), "warn"); location.replace("#/dashboard"); return; }
+  if (!hit) { location.replace(S.user ? "#/home" : "#/login"); return; }
+  if (hit[2] === "admin" && !isAdmin()) { toast(t("tAdminOnly"), "warn"); location.replace("#/home"); return; }
   try {
     const html = await hit[1]({ id:m[1] ? decodeURIComponent(m[1]) : null, id2:m[2] ? decodeURIComponent(m[2]) : null, params, path, seq });
     if (seq !== renderSeq || html == null) return;
@@ -1148,14 +1221,17 @@ function autoGrow(el) { el.style.height = "auto"; el.style.height = Math.max(72,
 
 function navItems() {
   if (!S.user || role() === "pending") return [];
-  const items = [["#/dashboard","navDashboard"],["#/positions","navPositions"],["#/library","navLibrary"],["#/reports","navReports"]];
+  const items = [["#/home","navHome"]];
+  if (isMgr() || isAdmin()) items.push(["#/grade","gradeBtn"]);
+  if (["hr", "admin"].includes(role())) items.push(["#/review","navReview"]);
+  items.push(["#/positions","navPositions"],["#/library","navLibrary"],["#/reports","navReports"]);
   if (isAdmin()) items.push(["#/admin/users","navAdmin"]);
   return items;
 }
 function renderHeader() {
   const { path } = parseHash();
   const items = navItems();
-  const isActive = h => path === h || (h !== "#/dashboard" && path.startsWith(h + "/")) || (h !== "#/dashboard" && path.startsWith(h + "?"));
+  const isActive = h => path === h || (h !== "#/home" && path.startsWith(h + "/")) || (h !== "#/home" && path.startsWith(h + "?")) || (h === "#/reports" && path === "#/salary");
   const dark = effectiveTheme() === "dark";
   const p = S.profile, u = S.user;
   const initials = (p?.displayName || u?.email || "?").split(" ").map(s => s[0]).slice(0, 2).join("").toUpperCase();
@@ -1163,7 +1239,7 @@ function renderHeader() {
   $("#hdr").innerHTML = `
   <div class="hdr-in">
     ${items.length ? `<button class="icon-btn menu-btn" data-act="drawer" aria-label="${t("menu")}" aria-expanded="false">☰</button>` : ""}
-    <a class="brand" href="${u ? "#/dashboard" : "#/login"}" aria-label="${esc(t("appName"))}">
+    <a class="brand" href="${u ? "#/home" : "#/login"}" aria-label="${esc(t("appName"))}">
       <span class="mono" aria-hidden="true">GS</span>
       <span class="brand-name">${esc(t("appName"))}<small>${S.lang === "en" ? "Dərəcələndirmə Sistemi" : "Grading System"}</small></span>
     </a>
@@ -1213,7 +1289,7 @@ function closeDrawer() { $("#drawer").hidden = true; $("#drawerBackdrop").hidden
 // First page (landing). Opens for everyone at the main address; a signed-in user gets "Continue".
 function scrLogin() {
   const signedIn = !!S.user && !DEMO.on, inDemo = DEMO.on;
-  const go = role() === "pending" ? "#/pending" : "#/dashboard";
+  const go = role() === "pending" ? "#/pending" : "#/home";
   return `<div class="login-wrap"><div class="card login-card">
     <div class="seg-lang lang-card" role="group" aria-label="${t("langLabel")}">
       <button data-act="lang" data-v="az" aria-pressed="${S.lang === "az"}">Azərbaycanca</button>
@@ -1224,7 +1300,7 @@ function scrLogin() {
     ${signedIn ? `<p class="small muted" style="margin-bottom:10px">${esc(t("signedInAs"))} <b>${esc(S.profile?.displayName || S.user.email || "")}</b></p>
       <a class="btn btn-primary btn-block" href="${go}">${t("continueApp")} →</a>
       <button class="btn btn-ghost btn-block" data-act="signout" style="margin-top:8px">${t("signOut")}</button>`
-    : inDemo ? `<a class="btn btn-primary btn-block" href="#/dashboard">${t("continueDemo")} →</a>
+    : inDemo ? `<a class="btn btn-primary btn-block" href="#/home">${t("continueDemo")} →</a>
       <button class="btn btn-ghost btn-block" data-act="signout" style="margin-top:8px">${t("exitDemo")}</button>`
     : `<button class="btn btn-google" data-act="signin">
       <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
@@ -1250,56 +1326,6 @@ function scrPending() {
     </div></div></div>`;
 }
 
-// S3 — Dashboard
-async function scrDashboard() {
-  const list = await loadEmployees(true);
-  const count = s => list.filter(e => e.status === s).length;
-  const stats = [["total", t("totalPositions"), list.length], ["submitted", statusLabel("submitted"), count("submitted")], ["under_evaluation", statusLabel("under_evaluation"), count("under_evaluation")],
-                 ["director_approval", statusLabel("director_approval"), count("director_approval")], ["approved", statusLabel("approved"), count("approved")]];
-  const byGrade = GRADES.map(g => [g, list.filter(e => finalOf(e) === g).length]);
-  const max = Math.max(1, ...byGrade.map(x => x[1]));
-  const recent = sortByUpdated(list).slice(0, 5);
-  const noDept = isMgr() && !myDept();
-  return `
-  <div class="page-head"><div><h1>${t("navDashboard")}</h1>
-    <p class="sub">${esc(S.profile?.displayName || "")} · ${esc(L(ROLES[role()]))}${isMgr() ? " · " + esc(deptName(myDept())) : ""}</p></div>
-    <div class="row">
-      <a class="btn btn-primary" href="#/positions/new">${icon("plus")} ${t("newPosition")}</a>
-      ${isHR() ? `<a class="btn btn-secondary" href="#/positions?status=submitted">${t("waitingEval")} (${count("submitted")})</a>` : ""}
-    </div></div>
-  ${noDept ? `<div class="banner warn"><b>${t("tNoDept")}</b></div>` : ""}
-  ${isDirector() && count("director_approval") ? `<div class="banner info row" style="justify-content:space-between"><b style="margin:0">${t("pendingDirBanner", { n:count("director_approval") })}</b>
-    <a class="btn btn-primary" href="#/positions?status=director_approval">${t("waitingMyApproval")}</a></div>` : ""}
-  ${role() === "hr" && count("submitted") ? `<div class="banner info row" style="justify-content:space-between"><b style="margin:0">${t("pendingEvalBanner", { n:count("submitted") })}</b>
-    <a class="btn btn-primary" href="#/positions?status=submitted">${t("waitingEval")}</a></div>` : ""}
-  ${isMgr() && count("returned") ? `<div class="banner warn row" style="justify-content:space-between"><b style="margin:0">${t("pendingFixBanner", { n:count("returned") })}</b>
-    <a class="btn btn-primary" href="#/positions?status=returned">${t("returnedToMe")}</a></div>` : ""}
-  ${isMgr() ? `<p class="small muted" style="margin-bottom:12px">${t("myDeptOnly")}</p>` : ""}
-  <div class="stats">${stats.map(([k, lbl, n]) => `
-    <div class="card stat"><span class="ic" aria-hidden="true">${icon(k)}</span><div><div class="num">${n}</div><div class="lbl">${esc(lbl)}</div></div></div>`).join("")}</div>
-  <div class="two-col">
-    <section class="card"><div class="label-caps">${t("gradeDistSub")}</div><h2>${t("gradeDist")}</h2>
-      <div class="bars">${byGrade.map(([g, n]) => `<div class="bar-row"><span><b>${g}</b></span>
-        <div class="bar-track" role="img" aria-label="${g}: ${n}"><div class="bar-fill" style="width:${(n / max) * 100}%"></div></div><span class="v">${n}</span></div>`).join("")}</div>
-    </section>
-    <section class="card"><div class="label-caps">${t("allStatuses")}</div><h2>${t("recent")}</h2>
-      ${recent.length ? `<div class="rows">${recent.map(e => `
-        <button class="rowlink" data-go="#/positions/${esc(e.id)}">
-          <div class="info"><div class="t1">${esc(e.fullName)}</div><div class="t2">${esc(e.position?.jobTitle)} · ${esc(deptName(e.departmentId))}</div></div>
-          ${badge(e.status)} ${pill(finalOf(e))}</button>`).join("")}</div>`
-        : emptyState()}
-    </section>
-  </div>
-  <section class="card" style="margin-top:16px"><h2>${t("quickActions")}</h2><div class="row">
-    <a class="btn btn-primary" href="#/positions/new">${t("newPosition")}</a>
-    ${isHR() ? `<a class="btn btn-secondary" href="#/positions?status=submitted">${t("waitingEval")}</a>` : ""}
-    ${isDirector() ? `<a class="btn btn-secondary" href="#/positions?status=director_approval">${t("waitingMyApproval")} (${count("director_approval")})</a>` : ""}
-    ${isMgr() ? `<a class="btn btn-secondary" href="#/positions?status=returned">${t("returnedToMe")} (${count("returned")})</a>` : ""}
-    <a class="btn btn-ghost" href="#/library">${t("navLibrary")}</a>
-    <a class="btn btn-ghost" href="#/reports">${t("navReports")}</a>
-    ${isAdmin() && !list.length ? `<button class="btn btn-ghost" data-act="sample">${t("loadSample")}</button>` : ""}
-  </div></section>`;
-}
 function emptyState(msg) {
   return `<div class="empty"><p><b>${esc(msg || t("noPositions"))}</b></p><div class="row">
     <a class="btn btn-primary" href="#/positions/new">${t("newPosition")}</a>
@@ -1443,7 +1469,7 @@ async function scrForm({ id, params, seq }) {
 function sectionComplete(s, d) {
   if (s.n === 1) return !!(d.position?.jobTitle && d.position?.department);
   if (s.n === 2) return !!(d.purpose?.primaryPurpose || "").trim();
-  if (s.n === 3) return allResps(d).some(r => (r.task || "").trim() && r.frequency && r.level);
+  if (s.n === 3) return allResps(d).some(r => (r.task || "").trim() && r.frequency);
   if (s.n === 9 && !(Number(d.position?.directReports) > 0)) return true;
   const obj = d[s.key] || {};
   const filled = s.fields.filter(f => { const v = obj[f[0]]; return v !== undefined && v !== null && v !== ""; }).length;
@@ -1515,9 +1541,10 @@ function section1HTML(d) {
       disabled: x[0] === "currentGrade" && !isHR() })).join("")}
   </div>`;
 }
+const RESP_SIMPLE = () => SECTIONS[2].fields.filter(f => ["task", "kpis", "frequency"].includes(f[0]));
 function respHTML(d) {
   const list = d.responsibilities || [];
-  const fs = SECTIONS[2].fields, hasStd = !!d.standard?.items?.length;
+  const fs = RESP_SIMPLE(), hasStd = !!d.standard?.items?.length;
   return `${standardHTML(d)}${list.map((r, i) => `<div class="resp" id="resp-${i}">
       <div class="resp-h"><span class="label-caps">${t("responsibility")} ${i + 1}</span>
       <button type="button" class="btn btn-danger" data-delresp="${i}" aria-label="${t("removeResp")} ${i + 1}" ${list.length <= 1 && !hasStd ? "disabled" : ""}>🗑 ${t("removeResp")}</button></div>
@@ -1550,7 +1577,7 @@ function formHTML() {
     ${SECTIONS.map(s => accHTML(s, body(s), d)).join("")}
     ${accHTML(SECMGR, mgrScoringHTML(d), d)}
     ${accHTML(SEC12, d.evaluation?.scores || d.managerEvaluation?.scores ? evaluationSectionHTML({ ...d, id:S.form.id, status:S.form.origStatus, history:[] }) : `<p class="muted">${t("noScores")}</p>`, d)}
-    ${accHTML(QUAL, `<p class="small muted">${t("qualSub")}</p><div class="fields">${QUAL.fields.map(f => fieldHTML(`qualifications.${f[0]}`, f, d.qualifications?.[f[0]])).join("")}</div>`, d)}
+    ${accHTML(QUAL, `<p class="small muted">${d.personCode ? t("empDataNote") : t("qualSub")}</p><div class="fields">${QUAL.fields.map(f => fieldHTML(`qualifications.${f[0]}`, f, d.qualifications?.[f[0]], { disabled:!!d.personCode })).join("")}</div>`, d)}
   </form>
   <div class="actionbar">
     <button type="button" class="btn btn-ghost" data-act="formcancel">${t("cancel")}</button>
@@ -1582,7 +1609,7 @@ function refreshFormBits() {
 }
 function rerenderForm() {
   const y = window.scrollY, active = document.activeElement?.id;
-  $("#main").innerHTML = formHTML();
+  $("#main").innerHTML = S.form?.mode === "grade" ? gradeHTML() : formHTML();
   $$("textarea").forEach(autoGrow);
   window.scrollTo(0, y);
   if (active) { const el = document.getElementById(active); if (el) { el.focus({ preventScroll:true }); if (el.setSelectionRange && el.type === "search") el.setSelectionRange(el.value.length, el.value.length); } }
@@ -1595,7 +1622,7 @@ function applyTitle(title) {
   p.jobLevel = lvl;
   if (!p.positionId || /^POS-[A-Z]+-\d{3}$/.test(p.positionId) && !p.positionId.startsWith(`POS-${p.department}-`)) p.positionId = nextPositionId(p.department, S.form.id);
   const prefilled = applyJd(d, jdFor(p.department, title), false);
-  if (prefilled) { S.open.add(2); S.open.add(3); toast(t("prefilled")); }
+  if (prefilled) { S.open.add(2); S.open.add(3); if (S.form?.mode !== "grade") toast(t("prefilled")); }
 }
 function validate(d) {
   const miss = [];
@@ -1604,11 +1631,11 @@ function validate(d) {
   if (!(d.position?.jobTitle || "").trim()) miss.push([S.form.other ? "f-otherTitle" : "f-position-jobTitle", 1]);
   if (!(d.purpose?.primaryPurpose || "").trim()) miss.push(["f-purpose-primaryPurpose", 2]);
   const rs = d.responsibilities || [];
-  const okResp = allResps(d).filter(r => (r.task || "").trim() && r.frequency && r.level);
+  const okResp = allResps(d).filter(r => (r.task || "").trim() && r.frequency);
   if (!okResp.length) {
-    const i = Math.max(0, rs.findIndex(r => !((r.task || "").trim() && r.frequency && r.level)));
+    const i = Math.max(0, rs.findIndex(r => !((r.task || "").trim() && r.frequency)));
     const r = rs[i] || {};
-    const k = !(r.task || "").trim() ? "task" : !r.frequency ? "frequency" : "level";
+    const k = !(r.task || "").trim() ? "task" : "frequency";
     miss.push([rs.length ? fid(`responsibilities.${i}.${k}`) : "sec-3", 3, "resp"]);
   }
   const q = d.qualifications || {};
@@ -1720,7 +1747,7 @@ async function scrDetail({ id, seq }) {
     if (s.n === 3) body = allResps(e).map((r, i) => `<div class="mini ${r.fixed ? "std" : ""}"><div class="row" style="justify-content:space-between"><b>${r.fixed ? "🔒 " : ""}${i + 1}. ${esc(r.task)}</b>
         <span class="row">${r.frequency ? `<span class="chip">${esc(optLabel("freq", r.frequency))}</span>` : ""}${r.level ? `<span class="chip navy">${esc(optLabel("respLevel", r.level))}</span>` : ""}</span></div>
         ${r.description ? `<p style="margin:8px 0 0">${esc(r.description)}</p>` : ""}
-        <div class="kv" style="margin-top:10px">${SECTIONS[2].fields.filter(f => ["outcomes", "kpis", "accountability"].includes(f[0])).map(f => `<div><div class="k">${esc(fl(f))}</div><div class="v">${esc(valueText(f, r[f[0]]) || "—")}</div></div>`).join("")}
+        <div class="kv" style="margin-top:10px"><div class="full"><div class="k">KPI</div><div class="v">${esc(r.kpis || "—")}</div></div>
         ${r.kpisExtra ? `<div class="full"><div class="k">${t("kpiExtra")}</div><div class="v">${esc(r.kpisExtra)}</div></div>` : ""}</div>
         ${r.fixed ? `<p class="small muted" style="margin:8px 0 0">🔒 ${t("fixedItem")}${e.standard?.version ? " · v" + e.standard.version : ""}</p>` : ""}</div>`).join("") || `<p class="muted">—</p>`;
     else if (s.n === 9 && !showPeople) body = `<p class="muted">${t("notApplicable")}</p>`;
@@ -1737,7 +1764,8 @@ async function scrDetail({ id, seq }) {
       <div class="muted small" style="margin-top:4px">${esc(deptName(e.departmentId))} · ${esc(levelName(p.jobLevel) || "—")} · ${esc(p.positionId || "—")}</div>
       <div class="row" style="margin-top:10px">${badge(e.status)}<span class="small muted">${t("lastUpdated")}: ${esc(fmtDate(e.updatedAt) || "—")}</span></div></div>
     <div style="text-align:center"><div class="label-caps" style="margin-bottom:6px">${t("grade")}</div><span class="pill lg ${finalOf(e) || p.currentGrade ? "" : "empty"}">${esc(finalOf(e) || p.currentGrade || "—")}</span>
-      <div class="small muted" style="margin-top:6px">${t("suggestedRange")}: ${rangeText(p.jobLevel)}</div></div></div>
+      <div class="small muted" style="margin-top:6px">${t("suggestedRange")}: ${rangeText(p.jobLevel)}</div>
+      ${finalOf(e) || p.currentGrade ? `<div class="small" style="margin-top:4px">💰 ${esc(bandText(finalOf(e) || p.currentGrade))}</div>` : ""}</div></div>
     ${e.status === "returned" && e.returnComment ? `<div class="banner warn" style="margin:16px 0 0"><b>${t("hrComment")}</b>${esc(e.returnComment)}</div>` : ""}
     ${e.profileChangedAfterApproval && e.status === "approved" && !isMgr() ? `<div class="banner warn" style="margin:16px 0 0"><b>✎ ${t("changedAfterApproval")}</b><span class="small">${esc(e.profileChangedAfterApproval.byName || "")} · ${esc(String(e.profileChangedAfterApproval.at || "").slice(0, 10))}</span></div>` : ""}
     ${e.status === "director_approval" && !canFinalApprove(e) ? `<div class="banner info" style="margin:16px 0 0"><b>⏳ ${t("waitingDirector")}</b>${isDirector() ? `<span class="small">${t(finalApproveBlock(e))}</span>` : ""}</div>` : ""}
@@ -1941,10 +1969,8 @@ function justList(just) {
 }
 // Who may see which scores (blindness): manager sees HR scores only after approval; HR sees manager scores after scoring
 function visibility(e) {
-  const hrDone = scoreTotal(e.evaluation?.scores).complete;
   if (isMgr()) return { mgr:true, hr:e.status === "approved" };
-  if (role() === "hr") return { mgr:hrDone || e.status === "approved", hr:true };
-  return { mgr:true, hr:true };   // HR Director, Admin
+  return { mgr:true, hr:true };
 }
 function evaluationSectionHTML(e) {
   const me = e.managerEvaluation, ev = e.evaluation, vis = visibility(e), cal = calibration(me?.scores, ev?.scores), fa = e.finalApproval || (e.managerApproval?.decision && e.managerApproval.decision !== "pending" ? e.managerApproval : null);
@@ -1958,13 +1984,12 @@ function evaluationSectionHTML(e) {
   if (vis.hr && ev?.scores) {
     kv.push([t("hrEvaluation"), `${esc(ev.evaluatorName || "—")} · ${esc(ev.evaluationDate || "")}`], [t("recommended"), pill(ev.recommendedGrade)], [t("finalApproved"), pill(ev.finalGrade)]);
     if (ev.comments) kv.push([t("comments"), esc(ev.comments)]);
-    if (cal && vis.mgr) kv.push([t("calibration"), cal.flagged ? `<span style="color:var(--warn)">⚠ ${esc(t("calFlag", { m:cal.maxGap, tg:cal.totalGap }))}</span>` : `✓ ${t("calOk")}`]);
-    if (ev.calibrationNote) kv.push([t("calNote"), esc(ev.calibrationNote)]);
-    if (ev.changedAfterReveal?.length) kv.push([t("changedAfterReveal"), `<span style="color:var(--warn)">${esc(ev.changedAfterReveal.map(k => L(FACTORS.find(f => f.key === k) || { en:k, az:k })).join(", "))}</span>`]);
+    if (ev.finalGrade) kv.push([t("salaryCol"), esc(bandText(ev.finalGrade))]);
   }
   kv.push([t("status"), badge(e.status)]);
   if (fa?.decision) kv.push([t("finalDecision"), `${esc(t("dec_" + fa.decision))}${fa.byName ? " · " + esc(fa.byName) : ""}${fa.date ? " · " + esc(fa.date) : ""}${fa.comment ? `<br><span class="small">${esc(fa.comment)}</span>` : ""}`]);
   parts.push(`<div class="kv" style="margin-top:14px">${kv.map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")}</div>`);
+  if (vis.hr) parts.push(adjustmentsHTML(ev));
   const js = [vis.mgr && me?.justifications && justList(me.justifications) ? `<p class="small" style="margin:12px 0 0"><b>${t("mgrJust")}</b></p>${justList(me.justifications)}` : "",
               vis.hr && ev?.justifications && justList(ev.justifications) ? `<p class="small" style="margin:12px 0 0"><b>${t("hrJust")}</b></p>${justList(ev.justifications)}` : ""].join("");
   return parts.join("") + js;
@@ -1972,14 +1997,14 @@ function evaluationSectionHTML(e) {
 
 /* ---------- Final approval panel (HR Director / HR Manager) ---------- */
 function directorPanelHTML(e) {
-  const ev = e.evaluation || {}, cal = calibration(e.managerEvaluation?.scores, ev.scores);
+  const ev = e.evaluation || {};
   return `<section class="card no-print" id="dirPanel" style="margin-bottom:16px;border-color:var(--accent)">
     <div class="label-caps">${t("finalApproval")}</div><h2 style="margin:4px 0 6px">${t("dirPanelTitle")}</h2>
     <p>${esc(t("dirPanelText", { g:ev.finalGrade || "—" }))}</p>
-    <p class="small muted">👁 ${t("nameHidden")}</p>
+    <p class="small muted">💰 ${t("salaryCol")}: <b>${esc(bandText(ev.finalGrade))}</b></p>
     ${scoresTable(e, !!e.managerEvaluation?.scores, true)}
-    ${cal?.flagged ? `<div class="banner warn" style="margin-top:12px"><b>⚠ ${esc(t("calFlag", { m:cal.maxGap, tg:cal.totalGap }))}</b>${esc(ev.calibrationNote || "")}</div>` : ""}
-    ${ev.changedAfterReveal?.length ? `<div class="banner warn"><b>${t("changedAfterReveal")}</b>${esc(ev.changedAfterReveal.map(k => L(FACTORS.find(f => f.key === k))).join(", "))}</div>` : ""}
+    ${(ev.flags || []).length ? `<div class="banner warn" style="margin-top:12px"><b>⚠ ${t("flagsTitle", { n:ev.flags.length })}</b><ul class="small" style="margin:4px 0 0;padding-left:18px">${ev.flags.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+    ${adjustmentsHTML(ev)}
     ${ev.comments ? `<p class="small"><b>${t("comments")}:</b> ${esc(ev.comments)}</p>` : ""}
     <div style="margin:12px 0">${consistencyHTML(e)}</div>
     <div class="field"><label for="dirComment">${t("dirComment")}</label><textarea id="dirComment"></textarea>
@@ -2062,165 +2087,6 @@ async function notify(name, e, o = {}) {
   } catch (err) { console.warn("notify", err); return 0; }
 }
 
-// S7 — HR evaluation (independent & blind to the manager's scores until HR has scored)
-async function scrEvaluate({ id, seq }) {
-  if (!canHREvaluate()) { toast(t("tNoAccessEval"), "warn"); location.replace(`#/positions/${id}`); return null; }
-  await loadEmployees();
-  const e = await loadOne(id);
-  if (seq !== renderSeq) return null;
-  if (!e) { toast(t("tNotFound"), "err"); location.replace("#/positions"); return null; }
-  if (isSelf(e)) { toast(t("conflictSelf"), "err"); location.replace(`#/positions/${id}`); return null; }
-  const ev = clone(e.evaluation) || {};
-  if (!S.evalState || S.evalState.id !== id) {
-    const hrDone = scoreTotal(ev.scores).complete && ev.evaluatorUid === S.user.uid;
-    S.evalState = { id, e, scores:{ ...(ev.scores || {}) }, just:{ ...(ev.justifications || {}) }, finalGrade:ev.finalGrade || "", finalTouched:!!ev.finalGrade,
-      comments:ev.comments || "", calibrationNote:ev.calibrationNote || "", evaluationDate:ev.evaluationDate || today(),
-      revealed:hrDone || !e.managerEvaluation?.scores, blind:ev.blindScores ? { ...ev.blindScores } : (hrDone ? { ...ev.scores } : null) };
-  } else S.evalState.e = e;
-  return evalHTML();
-}
-function evalHTML() {
-  const es = S.evalState, e = es.e, p = e.position || {}, me = e.managerEvaluation;
-  const st = scoreTotal(es.scores), rec = st.complete ? recommendGrade(st.total) : null, hints = profileHints(e);
-  if (!es.finalTouched) es.finalGrade = rec || es.finalGrade || "";
-  const differs = rec && es.finalGrade && es.finalGrade !== rec;
-  const outRange = es.finalGrade && p.jobLevel && !inRange(es.finalGrade, p.jobLevel);
-  const cal = es.revealed ? calibration(me?.scores, es.scores) : null;
-  const fa = e.finalApproval;
-  return `
-  <div class="page-head"><div><div class="label-caps">${esc(L(SEC12))}</div><h1>${t("evaluate")}: ${esc(p.jobTitle)}</h1>
-    <p class="sub">${esc(p.positionId || "")} · ${esc(deptName(e.departmentId))} · ${badge(e.status)}</p>
-    <p class="small muted">👁 ${t("nameHidden")}</p></div></div>
-  ${fa?.decision === "returned" && e.status === "under_evaluation" ? `<div class="banner warn"><b>${t("dirReturnedBanner")}${fa.byName ? " — " + esc(fa.byName) : ""}</b>${esc(fa.comment || "")}</div>` : ""}
-  <div class="eval-layout">
-    <aside class="summary"><div class="card sticky stack">
-      <div><div class="label-caps">${t("profileSummary")}</div>
-      <h3 style="margin-top:6px">${esc(p.jobTitle)}</h3>
-      <div class="small muted">${esc(levelName(p.jobLevel))} · ${esc(p.positionId || "")}</div>
-      <details style="margin-top:10px"><summary style="cursor:pointer;min-height:44px;display:flex;align-items:center">${esc(L(SECTIONS[1]))}</summary>
-        <p class="small">${esc(e.purpose?.primaryPurpose || "—")}</p>
-        <ul class="small" style="padding-left:18px">${allResps(e).map(r => `<li>${r.fixed ? "🔒 " : ""}${esc(r.task)}</li>`).join("")}</ul>
-        <p class="small muted">${esc(fl(SECTIONS[3].fields[0]))}: ${esc(optLabel("education", e.knowledge?.minEducation) || "—")} · ${esc(e.knowledge?.experienceYears ?? "—")} ${S.lang === "en" ? "yrs" : "il"}</p>
-        <p class="small muted">${esc(fl(SECTIONS[0].fields[9]))}: ${esc(p.directReports ?? 0)} · ${esc(fl(SECTIONS[0].fields[10]))}: ${esc(p.indirectReports ?? 0)}</p>
-      </details>
-      <a href="#/positions/${esc(e.id)}" class="small">${t("viewFull")} →</a></div>
-      <div><div class="label-caps">${t("mgrEvaluation")}</div>
-        ${!me?.scores ? `<p class="small muted">${t("noMgrScores")}</p>`
-          : es.revealed ? `<p class="small">${esc(me.evaluatorName || "")} · <b>${scoreTotal(me.scores).total} / 45</b> · ${pill(me.recommendedGrade)}</p>${me.comments ? `<p class="small">${esc(me.comments)}</p>` : ""}${justList(me.justifications)}`
-          : `<p class="small muted">🔒 ${t("blindInfo")}</p><button class="btn btn-secondary btn-block" data-act="evreveal" ${st.complete ? "" : "disabled"}>${t("revealMgr")}</button>`}
-      </div></div></aside>
-    <div class="factors">${factorCardsHTML({ target:"hr", scores:es.scores, just:es.just, hints, compare:es.revealed ? me?.scores : null, compareLabel:t("mgrScore") })}</div>
-    <aside class="result"><div class="card sticky stack">
-      <div><div class="label-caps">${t("totalScore")}</div><div class="big">${st.total}<span class="muted" style="font-size:16px"> / 45</span></div>
-        <div class="small muted">${st.count} / 9 ${t("scored")}${es.revealed && me?.scores ? ` · ${t("mgrScore")}: ${scoreTotal(me.scores).total}` : ""}</div></div>
-      <div><div class="label-caps">${t("recommended")}</div><div style="margin-top:6px">${rec ? `<span class="pill lg">${rec}</span>` : `<span class="small muted">${t("scoreAll")}</span>`}</div></div>
-      <div><div class="label-caps">${t("suggestedForLevel")}</div><div><b>${rangeText(p.jobLevel)}</b> <span class="small muted">${esc(p.jobLevel ? L(LEVELS[p.jobLevel]) : "")}</span></div></div>
-      ${cal ? `<div class="${cal.flagged ? "banner warn" : "banner info"}" style="margin:0"><b>${cal.flagged ? "⚠ " + esc(t("calFlag", { m:cal.maxGap, tg:cal.totalGap })) : "✓ " + t("calOk")}</b></div>
-        ${cal.flagged ? `<div class="field ${!es.calibrationNote.trim() ? "invalid" : ""}"><label for="evCal">${t("calNote")} <span class="req">*</span></label><textarea id="evCal" data-ev="calibrationNote">${esc(es.calibrationNote)}</textarea><span class="hint">${t("calHint")}</span></div>` : ""}` : ""}
-      <div class="field"><label for="evFinal">${t("finalApproved")}</label><select id="evFinal" data-ev="finalGrade">${gradeOptions(es.finalGrade, t("select"))}</select>
-        ${outRange ? `<span class="hint" style="color:var(--warn)">⚠ ${t("outOfRange")}</span>` : ""}</div>
-      ${consistencyHTML({ ...e, evaluation:{ ...(e.evaluation || {}), finalGrade:es.finalGrade } })}
-      <div class="field ${differs && !es.comments.trim() ? "invalid" : ""}"><label for="evComments">${t("comments")}${differs ? ` <span class="req">*</span>` : ""}</label>
-        <textarea id="evComments" data-ev="comments">${esc(es.comments)}</textarea>${differs ? `<span class="hint">${t("explainDiff")}</span>` : ""}</div>
-      <div class="field"><label for="evDate">${t("evalDate")}</label><input type="date" id="evDate" data-ev="evaluationDate" value="${esc(es.evaluationDate)}"></div>
-      <div class="field"><label for="evName">${t("evaluator")}</label><input type="text" id="evName" value="${esc(S.profile?.displayName || S.user?.email || "")}" disabled></div>
-    </div></aside>
-  </div>
-  <div class="actionbar">
-    <a class="btn btn-ghost" href="#/positions/${esc(e.id)}">${t("cancel")}</a>
-    <button type="button" class="btn btn-warn" data-act="evreturn">${t("returnChanges")}</button>
-    <button type="button" class="btn btn-secondary" data-act="evsave">${t("saveScores")}</button>
-    <button type="button" class="btn btn-primary" data-act="evsend">${t("sendToDirector")}</button>
-  </div>`;
-}
-function rerenderEval() {
-  const y = window.scrollY, active = document.activeElement;
-  const aid = active?.id, ds = active?.dataset?.score, dv = active?.dataset?.v;
-  $("#main").innerHTML = evalHTML(); $$("textarea").forEach(autoGrow); window.scrollTo(0, y);
-  const el = aid ? document.getElementById(aid) : ds ? $(`[data-score="${ds}"][data-target="hr"][data-v="${dv}"]`) : null;
-  if (el) { el.focus({ preventScroll:true }); if (el.tagName === "TEXTAREA") el.setSelectionRange(el.value.length, el.value.length); }
-}
-function focusInvalid(id) { const el = document.getElementById(id); el?.closest(".field")?.classList.add("invalid"); el?.scrollIntoView({ block:"center" }); el?.focus({ preventScroll:true }); }
-async function saveEval(mode) {
-  const es = S.evalState, e = es.e, me = e.managerEvaluation;
-  const st = scoreTotal(es.scores), rec = st.complete ? recommendGrade(st.total) : null, hints = profileHints(e);
-  const differs = rec && es.finalGrade && es.finalGrade !== rec;
-  const comment = es.comments.trim();
-  const cal = calibration(me?.scores, es.scores);
-  if (mode === "send") {
-    if (!st.complete || !es.finalGrade) { toast(t("tNeedAll"), "err"); return; }
-    const mj = missingJustifications(es.scores, es.just, hints);
-    if (mj.length) { toast(t("tNeedJust"), "err"); focusInvalid(`just-hr-${mj[0]}`); return; }
-    if (me?.scores && !es.revealed) { toast(t("tRevealFirst"), "err"); $("[data-act=evreveal]")?.focus(); return; }
-    if (cal?.flagged && !es.calibrationNote.trim()) { toast(t("tNeedCal"), "err"); focusInvalid("evCal"); return; }
-    if (differs && !comment) { toast(`${t("tNeedComment")} — ${t("explainDiff")}`, "err"); focusInvalid("evComments"); return; }
-    if (!(await confirmDlg(t("confirmSendDir", { g:es.finalGrade }), "", t("sendToDirector")))) return;
-  }
-  if (mode === "return") {
-    if (!comment) { toast(t("tNeedComment"), "err"); focusInvalid("evComments"); return; }
-    if (!(await confirmDlg(t("confirmReturn"), "", t("returnChanges")))) return;
-  }
-  if (mode === "save" && differs && !comment) { toast(`${t("tNeedComment")} — ${t("explainDiff")}`, "err"); focusInvalid("evComments"); return; }
-  const status = mode === "send" ? "director_approval" : mode === "return" ? "returned" : "under_evaluation";
-  const scores = Object.fromEntries(FACTORS.filter(f => es.scores[f.key]).map(f => [f.key, Number(es.scores[f.key])]));
-  const changed = es.blind ? FACTORS.filter(f => Number(es.blind[f.key]) !== Number(scores[f.key])).map(f => f.key) : [];
-  const evaluation = {
-    scores, totalScore:st.total, recommendedGrade:rec, finalGrade:es.finalGrade || "", comments:comment, approvalStatus:status,
-    justifications:Object.fromEntries(Object.entries(es.just).filter(([, v]) => (v || "").trim())),
-    calibrationNote:(es.calibrationNote || "").trim(), calibrationFlagged:!!cal?.flagged, maxGap:cal?.maxGap ?? null, totalGap:cal?.totalGap ?? null,
-    blindScores:es.blind || null, changedAfterReveal:changed,
-    evaluationDate:es.evaluationDate || today(), evaluatorName:S.profile?.displayName || S.user.email || "", evaluatorUid:S.user.uid
-  };
-  const action = mode === "send" ? "sent_to_director" : mode === "return" ? "returned_to_manager" : "hr_saved";
-  const upd = { status, evaluation, updatedAt:serverTimestamp(), updatedBy:S.user.uid, profileChangedAfterApproval:null,
-    history:arrayUnion(histEntry(action, mode === "return" ? comment : `${st.total}/45${es.finalGrade ? " · " + es.finalGrade : ""}${cal?.flagged ? " · ⚠" : ""}`)) };
-  if (mode === "return") upd.returnComment = comment;
-  $$(".actionbar .btn").forEach(b => b.disabled = true);
-  try {
-    await updateDoc(doc(db, "employees", e.id), upd);
-    let n = 0;
-    if (mode === "send") n = await notify("approval_request", e, { roles:["hr_director"], grade:es.finalGrade });
-    if (mode === "return") n = await notify("evaluation_returned", e, { roles:["manager"], dept:e.departmentId, comment });
-    S.employees = null; S.evalState = null;
-    toast((mode === "send" ? t("tSentToDirector") : mode === "return" ? t("tReturned") : t("tSaved")) + mailNote(n), "ok");
-    location.hash = `#/positions/${e.id}`;
-  } catch (err) { toast(errMsg(err), "err"); $$(".actionbar .btn").forEach(b => b.disabled = false); }
-}
-
-// S8 — Library (read-only for everyone; Admin can edit: titles, levels, departments)
-async function scrLibrary() {
-  if (isAdmin()) await loadEmployees();
-  const editing = !!S.libEdit;
-  const chipsFrom = editing ? S.libEdit : DEPARTMENTS;
-  return `<div class="page-head"><div><h1>${t("libTitle")}</h1><p class="sub">${t("libSub")}</p></div>
-      ${isAdmin() && !editing ? `<button class="btn btn-secondary" data-act="libedit">✎ ${t("libEdit")}</button>` : ""}
-      ${editing ? `<button class="btn btn-secondary" data-act="libadddept">${t("addDept")}</button>` : ""}</div>
-    ${editing ? `<div class="banner info"><span class="small">${t("libEditHint")}</span></div>` : `
-    <div class="card" style="padding:16px;margin-bottom:16px"><div class="field"><label for="libq">${t("search")}</label>
-      <input id="libq" type="search" value="${esc(S.libQ)}" data-lib="q" autocomplete="off"></div></div>`}
-    <div class="dept-chips" role="group" aria-label="${t("department")}">
-      <button data-libdept="" aria-pressed="${!S.libDept}">${t("all")}</button>
-      ${chipsFrom.filter(d => d.code).map(d => `<button data-libdept="${esc(d.code)}" aria-pressed="${S.libDept === d.code}">${esc(d.code)} · ${esc(L(d))}</button>`).join("")}</div>
-    <div id="libResults"></div>
-    ${editing ? `<div class="actionbar"><button class="btn btn-ghost" data-act="libcancel">${t("cancel")}</button>
-      <button class="btn btn-primary" data-act="libsave">${t("libSave")}</button></div>` : ""}`;
-}
-function renderLib() {
-  const box = $("#libResults"); if (!box) return;
-  if (S.libEdit) { box.innerHTML = libEditHTML(); $$("#libResults textarea").forEach(autoGrow); return; }
-  const q = S.libQ.trim().toLowerCase();
-  const cards = DEPARTMENTS.filter(d => !S.libDept || d.code === S.libDept).map(d => {
-    const deptHit = q && [d.en, d.az, d.code, d.descEn, d.descAz].join(" ").toLowerCase().includes(q);
-    const titles = d.titles.filter(x => !q || deptHit || x.toLowerCase().includes(q));
-    if (q && !titles.length) return "";
-    return `<section class="card"><div class="label-caps">${esc(d.code)} · ${d.titles.length} ${t("titlesCount")}</div>
-      <h2 style="margin:4px 0 2px">${esc(L(d))}</h2><div class="small muted" style="margin-bottom:8px">${esc(S.lang === "en" ? d.az : d.en)}</div>
-      <p class="small">${esc(S.lang === "en" ? d.descEn : d.descAz)}</p>
-      <ul class="titles">${titles.map(x => { const l = levelFor(x, d.code), has = !!S.jdt?.[jdId(d.code, x)]; return `<li><span class="n">${esc(x)}</span><span class="chip navy" title="${esc(L(LEVELS[l]))}">${l}</span><span class="chip">${rangeText(l)}</span>
-        <a class="btn btn-ghost jd-link ${has ? "has" : ""}" href="#/library/jd/${encodeURIComponent(d.code)}/${encodeURIComponent(x)}" title="${esc(t("jdTemplate"))}">📄 ${t("jdOpen")}${has ? " ✓" : ""}</a></li>`; }).join("")}</ul></section>`;
-  }).join("");
-  box.innerHTML = cards ? `<div class="grid">${cards}</div>` : `<div class="card"><div class="empty"><p>${t("noResults")}</p></div></div>`;
-}
 // Job description template editor (#/library/jd/:dept/:title)
 async function scrJd({ id:dept, id2:title }) {
   if (!DEPT[dept]) { location.replace("#/library"); return null; }
@@ -2234,7 +2100,7 @@ async function scrJd({ id:dept, id2:title }) {
 }
 function jdHTML() {
   const j = S.jdEdit, d = j.data, ro = !canEditJd(j.dept), lvl = levelFor(j.title, j.dept);
-  const P = SECTIONS[1].fields, R = SECTIONS[2].fields, K = SECTIONS[3].fields.filter(f => JD_REQ_FIELDS.includes(f[0]));
+  const P = SECTIONS[1].fields, R = RESP_SIMPLE(), K = SECTIONS[3].fields.filter(f => JD_REQ_FIELDS.includes(f[0]));
   return `<div class="no-print" style="margin-bottom:12px"><a href="#/library" class="small">← ${t("libTitle")}</a></div>
   <div class="page-head"><div><div class="label-caps">${t("jdTemplate")} · ${esc(j.dept)} · ${esc(deptName(j.dept))}</div><h1>${esc(j.title)}</h1>
     <p class="sub"><span class="chip navy">${esc(levelName(lvl))}</span> <span class="chip">${rangeText(lvl)}</span> <span class="chip">${j.custom ? t("jdCustom") : t("jdDefault")}</span></p></div></div>
@@ -2347,54 +2213,568 @@ async function saveLibrary() {
 }
 afterHooks.set(scrLibrary, renderLib);
 
-// S9 — Reports
-async function scrReports() {
-  await loadEmployees(true);
-  const a = S.repA, b = S.repB;
-  return `<div class="page-head"><div><h1>${t("reportsTitle")}</h1><p class="sub">${t("reportsSub")}</p>${isMgr() ? `<p class="small muted">${t("myDeptOnly")}</p>` : ""}</div></div>
-  <div class="grid">
-    <section class="card stack"><div><h2>${t("repA")}</h2><p class="small muted">${t("repADesc")}</p></div>
-      <div class="field"><label for="ra-d">${t("department")}</label><select id="ra-d" data-rep="A.dept">${deptOptions(a.dept)}</select></div>
-      <div class="field"><label for="ra-s">${t("status")}</label><select id="ra-s" data-rep="A.status">${statusOptions(a.status)}</select></div>
-      <div class="field"><label for="ra-g">${t("grade")}</label><select id="ra-g" data-rep="A.grade">${gradeOptions(a.grade)}</select></div>
-      <p class="small muted" id="ra-n">${filterList(S.employees, a).length} ${t("rows")}</p>
-      <div class="row"><button class="btn btn-secondary" data-act="exportA-pv">${t("previewBtn")}</button><button class="btn btn-primary" style="flex:1" data-act="exportA">${icon("export")} ${t("exportXlsx")}</button></div></section>
-    <section class="card stack"><div><h2>${t("repB")}</h2><p class="small muted">${t("repBDesc")}</p></div>
-      <div class="field"><label for="rb-d">${t("department")}</label><select id="rb-d" data-rep="B.dept">${deptOptions(b.dept)}</select></div>
-      <div class="field"><label for="rb-s">${t("status")}</label><select id="rb-s" data-rep="B.status">${statusOptions(b.status)}</select></div>
-      <p class="small muted" id="rb-n">${filterList(S.employees, b).length} ${t("rows")}</p>
-      <div class="row"><button class="btn btn-secondary" data-act="exportB-pv">${t("previewBtn")}</button><button class="btn btn-primary" style="flex:1" data-act="exportB">${icon("export")} ${t("exportXlsx")}</button></div></section>
-    <section class="card stack"><div><h2>${t("repC")}</h2><p class="small muted">${t("repCDesc")}</p></div>
-      <a class="btn btn-secondary btn-block" href="#/positions">${t("goPositions")}</a></section>
-  </div>
-  ${isDirector() ? evaluatorStatsHTML(S.employees || []) : ""}`;
+/* =====================================================================
+   v4 — salary bands, employee database (Excel), home page, "Grade ver",
+   HR review, reports list, statistics, history, library layout
+   ===================================================================== */
+
+// ---------- Salary bands (settings/salaryBands) — everyone sees, only Admin edits ----------
+const DEFAULT_BANDS = { G1:[500,800], G2:[650,1000], G3:[800,1300], G4:[1000,1700], G5:[1300,2200], G6:[1700,2900], G7:[2200,3800], G8:[2900,5000], G9:[3800,6500], G10:[5000,9000] };
+const defaultBands = () => ({ currency:"AZN", bands:Object.fromEntries(GRADES.map(g => [g, { min:DEFAULT_BANDS[g][0], max:DEFAULT_BANDS[g][1] }])) });
+async function loadSalaryBands() {
+  try { const s = await getDoc(doc(db, "settings", "salaryBands")); S.bands = s.exists() ? s.data() : defaultBands(); }
+  catch (e) { console.warn("bands", e); S.bands = defaultBands(); }
+}
+const fmtMoney = n => n == null || n === "" || isNaN(n) ? "—" : Number(n).toLocaleString("en-US").replace(/,/g, " ");
+function band(g) {
+  const b = (S.bands || defaultBands()).bands?.[String(g || "").replace("+", "")];
+  if (!b) return null;
+  return { min:Number(b.min), mid:Math.round((Number(b.min) + Number(b.max)) / 2), max:Number(b.max) };
+}
+const cur = () => (S.bands || defaultBands()).currency || "AZN";
+const bandText = g => { const b = band(g); return b ? `${fmtMoney(b.min)} – ${fmtMoney(b.max)} ${cur()}` : "—"; };
+// Individual zone inside the band: upper step (+) → mid–max, otherwise min–mid
+function personalZone(e) {
+  const pg = personalGradeOf(e), b = band(pg);
+  if (!b) return "";
+  return pg.endsWith("+") ? `${fmtMoney(b.mid)} – ${fmtMoney(b.max)} ${cur()}` : `${fmtMoney(b.min)} – ${fmtMoney(b.mid)} ${cur()}`;
+}
+function levelBandText(lvl) { const r = LEVELS[lvl]?.range; if (!r) return "—"; const a = band(r[0]), b = band(r[1]); return a && b ? `${fmtMoney(a.min)} – ${fmtMoney(b.max)} ${cur()}` : "—"; }
+
+async function scrSalary() {
+  await loadSalaryBands();
+  const ed = isAdmin(), B = S.bands;
+  return `<div class="no-print" style="margin-bottom:12px"><a href="#/reports" class="small">← ${t("navReports")}</a></div>
+  <div class="page-head"><div><h1>${t("salaryTitle")}</h1><p class="sub">${t("salarySub")}</p></div>
+    <div class="row"><button class="btn btn-ghost" data-act="exportSalary">${icon("export")} ${t("exportXlsx")}</button></div></div>
+  <section class="card"><div class="table-wrap-always"><table class="tbl cmp salary-tbl"><thead><tr><th>${t("grade")}</th><th>${t("sMin")}</th><th>${t("sMid")}</th><th>${t("sMax")}</th><th>${t("sLevels")}</th></tr></thead><tbody>
+    ${GRADES.map(g => { const b = band(g); const lv = Object.entries(LEVELS).filter(([, v]) => gradeIdx(g) >= gradeIdx(v.range[0]) && gradeIdx(g) <= gradeIdx(v.range[1])).map(([k]) => k).join(", ");
+      return `<tr><td>${pill(g)}</td>
+      <td>${ed ? `<input type="number" min="0" step="50" class="money" data-band="${g}.min" value="${b.min}" aria-label="${g} ${t("sMin")}">` : fmtMoney(b.min)}</td>
+      <td class="muted" id="mid-${g}">${fmtMoney(b.mid)}</td>
+      <td>${ed ? `<input type="number" min="0" step="50" class="money" data-band="${g}.max" value="${b.max}" aria-label="${g} ${t("sMax")}">` : fmtMoney(b.max)}</td>
+      <td class="small muted">${lv}</td></tr>`; }).join("")}</tbody></table></div>
+    <div class="row" style="margin-top:14px;justify-content:space-between">
+      <div class="field" style="flex:0 0 140px"><label for="bandCur">${t("sCurrency")}</label><input id="bandCur" type="text" value="${esc(B.currency || "AZN")}" ${ed ? "" : "disabled"}></div>
+      <p class="small muted" style="flex:1 1 300px;margin:0">${t("salaryNote")}${B.updatedByName ? ` · ${esc(B.updatedByName)}` : ""}</p>
+      ${ed ? `<button class="btn btn-primary" data-act="saveBands">${t("save")}</button>` : ""}</div></section>`;
+}
+async function saveBands() {
+  const bands = {};
+  for (const g of GRADES) {
+    const min = Number($(`[data-band="${g}.min"]`).value), max = Number($(`[data-band="${g}.max"]`).value);
+    if (!(min >= 0) || !(max > 0) || min >= max) { toast(t("tBandInvalid", { g }), "err"); $(`[data-band="${g}.min"]`).focus(); return; }
+    bands[g] = { min, max };
+  }
+  try {
+    const data = { currency:($("#bandCur").value || "AZN").trim(), bands, updatedAt:serverTimestamp(), updatedByName:S.profile?.displayName || S.user.email || "" };
+    await setDoc(doc(db, "settings", "salaryBands"), data); S.bands = data; toast(t("tSaved"), "ok"); render();
+  } catch (e) { toast(errMsg(e), "err"); }
+}
+function exportSalary(preview) {
+  if (!xlsxReady()) return;
+  const hs = [t("grade"), t("sMin"), t("sMid"), t("sMax"), t("sCurrency")];
+  const rows = GRADES.map(g => { const b = band(g); return { [hs[0]]:g, [hs[1]]:b.min, [hs[2]]:b.mid, [hs[3]]:b.max, [hs[4]]:cur() }; });
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, makeSheet(rows, hs), t("salaryTitle").slice(0, 30));
+  finishExport(wb, `salary-bands-${stamp()}.xlsx`, preview);
 }
 
-// (7) Evaluator statistics — who scores consistently higher / lower
+// ---------- Employee database (people) — loaded from Excel by HR / Admin ----------
+const PEOPLE_COLS = [
+  ["code", "Employee Code", "İşçi kodu", 1], ["fullName", "Full Name", "Ad, soyad", 1], ["email", "E-mail", "E-poçt", 0],
+  ["departmentId", "Department", "Departament", 1], ["jobTitle", "Job Title", "Vəzifə", 1], ["hireDate", "Hire Date", "İşə qəbul tarixi", 0],
+  ["education", "Education", "Təhsil", 1], ["fieldOfStudy", "Field of Study", "İxtisas sahəsi", 0], ["experienceYears", "Experience (years)", "Təcrübə (il)", 1],
+  ["hospitalityYears", "Hospitality Experience (years)", "Qonaqpərvərlik təcrübəsi (il)", 0], ["certifications", "Certifications", "Sertifikatlar", 0], ["languages", "Languages", "Dillər", 0]
+];
+async function loadPeople(force = false) {
+  if (S.people && !force) return S.people;
+  let snap;
+  if (isHR()) snap = await getDocs(collection(db, "people"));
+  else if (isMgr() && myDept()) snap = await getDocs(query(collection(db, "people"), where("departmentId", "==", myDept())));
+  else { S.people = []; return S.people; }
+  S.people = snap.docs.map(d => ({ code:d.id, ...d.data() })).sort((a, b) => (a.fullName || "").localeCompare(b.fullName || ""));
+  return S.people;
+}
+const personQual = p => ({ education:p.education || "", fieldOfStudy:p.fieldOfStudy || "", experienceYears:p.experienceYears ?? "", hospitalityYears:p.hospitalityYears ?? "",
+  certificationsHeld:p.certifications || "", languagesSpoken:p.languages || "", notes:"" });
+function normDept(v) {
+  const s = String(v || "").trim().toLowerCase(); if (!s) return "";
+  const d = DEPARTMENTS.find(x => x.code.toLowerCase() === s || x.en.toLowerCase() === s || x.az.toLowerCase() === s);
+  return d ? d.code : "";
+}
+function normEdu(v) {
+  const s = String(v || "").trim().toLowerCase(); if (!s) return "";
+  for (const [k, [en, az]] of Object.entries(OPTS.education)) if ([k, en.toLowerCase(), az.toLowerCase()].includes(s)) return k;
+  return "";
+}
+function normDate(v) {
+  if (v instanceof Date && !isNaN(v)) return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, "0")}-${String(v.getDate()).padStart(2, "0")}`;
+  const s = String(v || "").trim(); if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/); if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  return s;
+}
+function downloadPeopleTemplate() {
+  if (!xlsxReady()) return;
+  const hs = PEOPLE_COLS.map(c => fl(c));
+  const ex = [["EMP-101", "Aysel Məmmədova", "aysel@hotel.az", "FO", "Front Desk Agent", "2023-04-10", "bachelor", "Tourism", 3, 3, "—", "Azerbaijani, English"],
+              ["EMP-102", "Elvin Quliyev", "elvin@hotel.az", "HK", "Room Attendant", "2022-09-01", "secondary", "", 2, 2, "", "Azerbaijani"]];
+  const rows = ex.map(r => Object.fromEntries(hs.map((h, i) => [h, r[i]])));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, makeSheet(rows, hs), t("peopleSheet"));
+  const help = [...DEPARTMENTS.map(d => ({ [t("department")]:d.code, [t("name")]:L(d) })), {},
+    ...Object.entries(OPTS.education).map(([k, v]) => ({ [t("department")]:k, [t("name")]:L(v) }))];
+  XLSX.utils.book_append_sheet(wb, makeSheet(help, [t("department"), t("name")]), t("helpSheet"));
+  XLSX.writeFile(wb, `employees-template.xlsx`);
+}
+async function readPeopleFile(file) {
+  const wb = XLSX.read(await file.arrayBuffer(), { cellDates:true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(ws, { defval:"", raw:true });
+  const keyOf = h => { const s = String(h).trim().toLowerCase(); const c = PEOPLE_COLS.find(c => [c[0].toLowerCase(), c[1].toLowerCase(), c[2].toLowerCase()].includes(s)); return c ? c[0] : null; };
+  const seen = new Set(), rows = [];
+  raw.forEach((r, i) => {
+    const o = {}; Object.entries(r).forEach(([h, v]) => { const k = keyOf(h); if (k && (o[k] === undefined || o[k] === "")) o[k] = typeof v === "string" ? v.trim() : v; });
+    if (!Object.values(o).some(v => v !== "" && v != null)) return;
+    const errs = [];
+    o.code = String(o.code || "").trim(); o.departmentId = normDept(o.departmentId); o.education = normEdu(o.education); o.hireDate = normDate(o.hireDate);
+    ["experienceYears", "hospitalityYears"].forEach(k => { if (o[k] === "" || o[k] == null) o[k] = k === "hospitalityYears" ? "" : o[k]; else { const n = Number(o[k]); o[k] = isNaN(n) ? o[k] : n; } });
+    if (!o.code) errs.push(t("errCode")); else if (seen.has(o.code)) errs.push(t("errDupCode")); else seen.add(o.code);
+    if (!o.fullName) errs.push(t("errName"));
+    if (!o.departmentId) errs.push(t("errDept"));
+    if (!o.jobTitle) errs.push(t("errTitle"));
+    if (!o.education) errs.push(t("errEdu"));
+    if (o.experienceYears === "" || o.experienceYears == null || isNaN(Number(o.experienceYears))) errs.push(t("errExp"));
+    if (/[\/]/.test(o.code)) errs.push(t("errCode"));
+    rows.push({ line:i + 2, data:o, errs });
+  });
+  return rows;
+}
+async function scrPeople() {
+  if (!isHR()) { toast(t("tPermission"), "warn"); location.replace("#/home"); return null; }
+  await loadPeople(true);
+  const imp = S.peopleImport;
+  const ok = imp ? imp.filter(r => !r.errs.length) : [], bad = imp ? imp.filter(r => r.errs.length) : [];
+  const q = (S.peopleQ || "").toLowerCase();
+  const list = S.people.filter(p => !q || [p.fullName, p.code, p.jobTitle, p.departmentId].join(" ").toLowerCase().includes(q));
+  return `<div class="page-head"><div><h1>${t("peopleTitle")}</h1><p class="sub">${t("peopleSub")}</p></div></div>
+  <section class="card" style="margin-bottom:16px"><h2>${t("peopleImport")}</h2>
+    <ol class="steps-ol small"><li>${t("peopleStep1")}</li><li>${t("peopleStep2")}</li><li>${t("peopleStep3")}</li></ol>
+    <div class="row"><button class="btn btn-ghost" data-act="peopleTpl">⤓ ${t("peopleTpl")}</button>
+      <label class="btn btn-secondary" for="peopleFile">⤒ ${t("peopleChoose")}</label><input type="file" id="peopleFile" accept=".xlsx,.xls,.csv" class="visually-hidden"></div>
+    ${imp ? `<div class="banner ${bad.length ? "warn" : "info"}" style="margin-top:14px"><b>${t("peopleCheck", { ok:ok.length, bad:bad.length })}</b>
+        ${bad.length ? `<ul class="small" style="margin:6px 0 0;padding-left:18px">${bad.slice(0, 12).map(r => `<li>${t("line")} ${r.line}: ${esc(r.data.code || "—")} — ${esc(r.errs.join("; "))}</li>`).join("")}</ul>` : ""}</div>
+      <div class="row"><button class="btn btn-primary" data-act="peopleImport" ${ok.length ? "" : "disabled"}>${t("peopleDo", { n:ok.length })}</button>
+        <button class="btn btn-ghost" data-act="peopleCancel">${t("cancel")}</button></div>` : ""}
+  </section>
+  <section class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">${t("peopleList")} <span class="chip">${S.people.length}</span></h2>
+    <div class="field" style="flex:0 1 280px"><input type="search" id="peopleQ" data-peopleq="1" aria-label="${t("search")}" placeholder="${t("search")}" value="${esc(S.peopleQ || "")}"></div></div>
+    ${S.people.length ? `<div class="table-wrap-always" style="margin-top:12px"><table class="tbl cmp" id="peopleTbl"><thead><tr>${["code", "fullName", "departmentId", "jobTitle", "education", "experienceYears"].map(k => `<th>${esc(fl(PEOPLE_COLS.find(c => c[0] === k)))}</th>`).join("")}</tr></thead>
+      <tbody>${list.map(p => `<tr><td>${esc(p.code)}</td><td><b>${esc(p.fullName)}</b></td><td>${esc(p.departmentId)}</td><td>${esc(p.jobTitle)}</td><td>${esc(optLabel("education", p.education))}</td><td>${esc(p.experienceYears ?? "")}</td></tr>`).join("")}</tbody></table></div>`
+      : `<div class="empty"><p class="muted">${t("peopleEmpty")}</p></div>`}</section>`;
+}
+async function importPeople() {
+  const rows = (S.peopleImport || []).filter(r => !r.errs.length);
+  if (!rows.length) return;
+  if (!(await confirmDlg(t("peopleDo", { n:rows.length }) + "?", t("peopleOverwrite")))) return;
+  try {
+    for (let i = 0; i < rows.length; i += 400) {
+      const b = writeBatch(db);
+      rows.slice(i, i + 400).forEach(r => b.set(doc(db, "people", r.data.code), { ...r.data, updatedAt:serverTimestamp(), updatedBy:S.user.uid }));
+      await b.commit();
+    }
+    S.peopleImport = null; S.people = null; toast(t("tPeopleDone", { n:rows.length }), "ok"); render();
+  } catch (e) { toast(errMsg(e), "err"); }
+}
+
+// ---------- Home ----------
+async function scrHome() {
+  const list = await loadEmployees(true);
+  const count = s => list.filter(e => e.status === s).length;
+  let tiles = [];
+  if (isMgr() || isAdmin()) {
+    await loadPeople();
+    const graded = new Set(list.map(e => e.employeeCode));
+    const todo = (S.people || []).filter(p => !graded.has(p.code)).length;
+    tiles.push({ main:true, ic:"✎", title:t("gradeBtn"), text:t("homeGradeText", { n:todo }), href:"#/grade", n:todo });
+    if (count("draft")) tiles.push({ ic:"✎", title:t("homeDrafts"), n:count("draft"), href:"#/positions?status=draft" });
+    if (count("returned")) tiles.push({ ic:"↩", title:t("homeReturned"), n:count("returned"), href:"#/positions?status=returned", warn:true });
+  }
+  if (["hr", "admin"].includes(role())) {
+    const q = list.filter(e => ["submitted", "under_evaluation"].includes(e.status));
+    const flagged = q.filter(e => reviewFlags(e).length).length;
+    tiles.push({ main:role() === "hr", ic:"🔍", title:t("homeReview"), text:t("homeReviewText", { n:q.length, f:flagged }), n:q.length, href:"#/review" });
+  }
+  if (isDirector()) tiles.push({ main:role() === "hr_director", ic:"✓", title:t("homeApprove"), text:t("homeApproveText", { n:count("director_approval") }), n:count("director_approval"), href:"#/positions?status=director_approval" });
+  if (isMgr()) tiles.push({ ic:"⏳", title:t("homeInProgress"), n:count("submitted") + count("under_evaluation") + count("director_approval"), href:"#/positions" });
+  tiles.push({ ic:"✓", title:t("homeApproved"), n:count("approved"), href:"#/positions?status=approved" });
+  const steps = [["1", t("step1"), t("step1d")], ["2", t("step2"), t("step2d")], ["3", t("step3"), t("step3d")], ["4", t("step4"), t("step4d")]];
+  return `<div class="page-head"><div><h1>${t("hello")}, ${esc((S.profile?.displayName || "").split(" ")[0])}</h1>
+    <p class="sub">${esc(L(ROLES[role()]))}${isMgr() ? " · " + esc(deptName(myDept())) : ""}</p></div></div>
+  ${isMgr() && !myDept() ? `<div class="banner warn"><b>${t("tNoDept")}</b></div>` : ""}
+  <h2 class="home-h">${t("homeTodo")}</h2>
+  ${[tiles.filter(x => x.main), tiles.filter(x => !x.main)].map(group => `<div class="home-tiles ${group[0]?.main ? "home-main" : ""}">${group.map(x => `<a class="tile ${x.main ? "tile-primary" : ""} ${x.warn ? "warn" : ""}" href="${x.href}">
+      <span class="tile-ic" aria-hidden="true">${x.ic}</span><span class="tile-b"><b>${esc(x.title)}</b>${x.text ? `<span>${esc(x.text)}</span>` : ""}</span>
+      ${x.n != null ? `<span class="tile-n">${x.n}</span>` : ""}<span class="tile-go" aria-hidden="true">→</span></a>`).join("")}</div>`).join("")}
+  ${isAdmin() ? `<h2 class="home-h">${t("homeAdmin")}</h2><div class="home-links">
+      <a class="btn btn-ghost" href="#/admin/people">👥 ${t("peopleTitle")}</a><a class="btn btn-ghost" href="#/salary">💰 ${t("salaryTitle")}</a>
+      <a class="btn btn-ghost" href="#/admin/users">🔑 ${t("usersTitle")}</a>${!list.length ? `<button class="btn btn-ghost" data-act="sample">${t("loadSample")}</button>` : ""}</div>`
+    : role() === "hr" || role() === "hr_director" ? `<div class="home-links"><a class="btn btn-ghost" href="#/admin/people">👥 ${t("peopleTitle")}</a></div>` : ""}
+  <h2 class="home-h">${t("howItWorks")}</h2>
+  <ol class="how">${steps.map(([n, a, b]) => `<li><span class="how-n">${n}</span><div><b>${a}</b><span>${b}</span></div></li>`).join("")}</ol>`;
+}
+
+// ---------- "Grade ver": pick an employee ----------
+async function scrGradeList() {
+  if (!(isMgr() || isAdmin())) { location.replace("#/home"); return null; }
+  await Promise.all([loadPeople(), loadEmployees(true)]);
+  return `<div class="page-head"><div><h1>${t("gradeBtn")}</h1><p class="sub">${t("gradeListSub")}</p></div></div>
+  <div class="card" style="padding:16px;margin-bottom:16px"><div class="toolbar" style="margin:0">
+    <div class="field search"><label for="gq">${t("search")}</label><input id="gq" type="search" data-gq="1" value="${esc(S.gradeQ || "")}" placeholder="${esc(t("gradeSearchPh"))}" autocomplete="off"></div>
+    ${isAdmin() ? `<div class="field"><label for="gd">${t("department")}</label><select id="gd" data-gd="1">${deptOptions(S.gradeDept || "")}</select></div>` : ""}</div></div>
+  <div id="gradeResults"></div>`;
+}
+function renderGradeList() {
+  const box = $("#gradeResults"); if (!box) return;
+  const q = (S.gradeQ || "").toLowerCase();
+  const people = (S.people || []).filter(p => (!S.gradeDept || p.departmentId === S.gradeDept) && (!q || [p.fullName, p.code, p.jobTitle].join(" ").toLowerCase().includes(q)));
+  if (!(S.people || []).length) { box.innerHTML = `<div class="card"><div class="empty"><p><b>${t("noPeople")}</b></p><p class="muted small">${t("noPeopleHint")}</p></div></div>`; return; }
+  const recOf = code => (S.employees || []).find(e => e.employeeCode === code);
+  box.innerHTML = `<div class="card" style="padding:4px 0">${people.map(p => {
+    const r = recOf(p.code), init = (p.fullName || "?").split(" ").map(s => s[0]).slice(0, 2).join("").toUpperCase();
+    return `<button class="person" data-go="#/grade/${encodeURIComponent(p.code)}"><span class="avatar">${esc(init)}</span>
+      <span class="person-b"><b>${esc(p.fullName)}</b><span>${esc(p.jobTitle)} · ${esc(deptName(p.departmentId))} · ${esc(p.code)}</span></span>
+      <span class="person-s">${r ? `${badge(r.status)} ${r.status === "approved" ? pill(r.position?.currentGrade) : ""}` : `<span class="chip">${t("notGraded")}</span>`}</span>
+      <span class="tile-go" aria-hidden="true">→</span></button>`; }).join("") || `<p class="muted" style="padding:16px">${t("noResults")}</p>`}</div>`;
+}
+afterHooks.set(scrGradeList, renderGradeList);
+
+// ---------- Grade page: data pre-filled, the manager only scores ----------
+async function scrGrade({ id:code, seq }) {
+  const key = "grade:" + code;
+  if (S.form && S.form.key === key) return gradeHTML();
+  await Promise.all([loadPeople(), loadEmployees()]);
+  if (seq !== renderSeq) return null;
+  const person = (S.people || []).find(p => p.code === code);
+  if (!person) { toast(t("tNotFound"), "err"); location.replace("#/grade"); return null; }
+  const rec = (S.employees || []).find(e => e.employeeCode === code);
+  if (rec && !workflowOpen(rec.status)) { location.replace(`#/positions/${rec.id}`); return null; }
+  let data;
+  if (rec) { data = pickPersist(rec); if (!Array.isArray(data.responsibilities)) data.responsibilities = []; SECTIONS.forEach(s => { if (!s.array && !data[s.key]) data[s.key] = {}; }); }
+  else {
+    data = blankEmployee();
+    Object.assign(data, { employeeCode:person.code, fullName:person.fullName, hireDate:person.hireDate || "", employeeEmail:person.email || "", departmentId:person.departmentId, personCode:person.code });
+    data.position.department = person.departmentId; data.responsibilities = [];
+  }
+  data.personCode = person.code;
+  data.qualifications = personQual(person);
+  S.form = { key, id:rec?.id || null, data, origStatus:rec?.status || "draft", approvedOk:true, titleSearch:"", other:false, mode:"grade", person };
+  if (!rec) { applyTitle(person.jobTitle); if (!data.responsibilities.length && !data.standard?.items?.length) data.responsibilities = [blankResp()]; }
+  if (!canMgrScore(data)) { S.form = null; toast(isSelf(data) ? t("conflictSelf") : t("tPermission"), "err"); location.replace("#/grade"); return null; }
+  S.dirty = false;
+  return gradeHTML();
+}
+function gradeHTML() {
+  const f = S.form, d = f.data, p = d.position || {}, me = d.managerEvaluation || (d.managerEvaluation = { scores:{}, justifications:{}, comments:"" });
+  const st = scoreTotal(me.scores), rec = st.complete ? recommendGrade(st.total) : null, q = d.qualifications || {}, lvl = p.jobLevel;
+  const resp = allResps(d).filter(r => (r.task || "").trim());
+  const kv = (k, v) => `<div><div class="k">${k}</div><div class="v">${esc(v === "" || v == null ? "—" : v)}</div></div>`;
+  return `<div class="no-print" style="margin-bottom:12px"><a href="#/grade" class="small">← ${t("gradeBtn")}</a></div>
+  <div class="page-head"><div><div class="label-caps">${esc(d.employeeCode)} · ${esc(p.positionId || "")}</div><h1>${esc(d.fullName)}</h1>
+    <p class="sub">${esc(p.jobTitle)} · ${esc(deptName(d.departmentId))}</p></div>${f.id ? badge(f.origStatus) : ""}</div>
+  ${f.origStatus === "returned" && d.returnComment ? `<div class="banner warn"><b>${t("returnedBanner")}</b>${esc(d.returnComment)}</div>` : ""}
+  <div class="grade-grid">
+    <section class="card"><div class="label-caps">${t("empData")}</div>
+      <div class="kv" style="margin-top:10px">${kv(t("education"), optLabel("education", q.education))}${kv(fl(QUAL.fields[1]), q.fieldOfStudy)}${kv(fl(QUAL.fields[2]), q.experienceYears)}
+        ${kv(fl(QUAL.fields[3]), q.hospitalityYears)}${kv(fl(QUAL.fields[4]), q.certificationsHeld)}${kv(fl(QUAL.fields[5]), q.languagesSpoken)}${kv(fl(TOP_FIELDS[2]), d.hireDate)}</div>
+      <p class="small muted" style="margin:10px 0 0">ⓘ ${t("empDataNote")}</p></section>
+    <section class="card"><div class="label-caps">${t("jobData")}</div>
+      <div class="row" style="margin:8px 0"><span class="chip navy">${esc(levelName(lvl))}</span><span class="chip">${rangeText(lvl)}</span><span class="chip">💰 ${levelBandText(lvl)}</span></div>
+      <p class="small">${esc(d.purpose?.primaryPurpose || "")}</p>
+      <details class="small"><summary>${t("jdShow", { n:resp.length })}</summary><ul class="jd-list">${resp.map(r => `<li>${r.fixed ? "🔒 " : ""}<b>${esc(r.task)}</b>${r.frequency ? ` <span class="chip">${esc(optLabel("freq", r.frequency))}</span>` : ""}${r.kpis ? `<br><span class="muted">KPI: ${esc(r.kpis)}</span>` : ""}</li>`).join("")}</ul></details>
+      ${f.id ? `<a class="small" href="#/positions/${esc(f.id)}/edit">${t("editProfileOpt")}</a>` : ""}</section>
+  </div>
+  <h2 style="margin:20px 0 4px">${t("gradeFactors")}</h2><p class="small muted">${t("gradeFactorsSub")}</p>
+  <div class="stack" id="sec-12A">${factorCardsHTML({ target:"mgr", scores:me.scores, just:me.justifications || (me.justifications = {}), hints:profileHints(d) })}</div>
+  <div class="field" style="margin-top:12px"><label for="f-mgrComments">${t("mgrComment")}</label><textarea id="f-mgrComments" data-mgrcomment="1">${esc(me.comments || "")}</textarea></div>
+  <div class="actionbar grade-bar">
+    <div class="grade-sum"><span class="small muted">${t("totalScore")}</span> <b>${st.total} / 45</b> · <span class="small muted">${st.count}/9</span>
+      ${rec ? ` · ${pill(rec)} <span class="small muted">${bandText(rec)}</span>` : ""}</div>
+    <button type="button" class="btn btn-ghost" data-act="formcancel">${t("cancel")}</button>
+    <button type="button" class="btn btn-secondary" data-act="savedraft">${t("saveDraft")}</button>
+    <button type="button" class="btn btn-primary" data-act="submitform">${t("sendToHR")}</button></div>`;
+}
+
+// ---------- HR review ----------
+function reviewFlags(e) {
+  const sc = e.managerEvaluation?.scores || {}, h = profileHints(e), st = scoreTotal(sc), flags = [];
+  if (!st.complete) return [{ k:"incomplete" }];
+  FACTORS.forEach(f => { if (needsJustification(Number(sc[f.key]), h[f.key])) flags.push({ k:"dev", f:f.key, v:sc[f.key], h:h[f.key] }); });
+  const rec = recommendGrade(st.total), lvl = e.position?.jobLevel;
+  if (rec && lvl && !inRange(rec, lvl)) flags.push({ k:"range", g:rec, r:rangeText(lvl) });
+  const vals = FACTORS.map(f => Number(sc[f.key])); if (vals.every(v => v === vals[0])) flags.push({ k:"same", v:vals[0] });
+  if (similarPositions({ ...e, evaluation:{ finalGrade:rec } }).outlier) flags.push({ k:"outlier", g:rec });
+  return flags;
+}
+const flagText = x => ({ dev:t("flDev", { f:L(FACTORS.find(f => f.key === x.f) || { en:"", az:"" }), v:x.v, h:x.h }), range:t("flRange", { g:x.g, r:x.r }),
+  same:t("flSame", { v:x.v }), outlier:t("flOutlier", { g:x.g }), incomplete:t("flIncomplete") }[x.k] || x.k);
+async function scrReviewQueue() {
+  if (!["hr", "admin", "hr_director"].includes(role())) { location.replace("#/home"); return null; }
+  const list = (await loadEmployees(true)).filter(e => ["submitted", "under_evaluation"].includes(e.status))
+    .map(e => ({ e, fl:reviewFlags(e) })).sort((a, b) => b.fl.length - a.fl.length);
+  return `<div class="page-head"><div><h1>${t("homeReview")}</h1><p class="sub">${t("reviewSub")}</p></div></div>
+  ${list.length ? `<div class="card" style="padding:4px 0">${list.map(({ e, fl }) => { const st = scoreTotal(e.managerEvaluation?.scores); const rec = st.complete ? recommendGrade(st.total) : "";
+    return `<div class="person rq"><span class="person-b"><b>${esc(e.fullName)}</b><span>${esc(e.position?.jobTitle)} · ${esc(deptName(e.departmentId))} · ${t("mgrScore")}: ${st.total}/45 ${rec ? "→ " + rec : ""}</span>
+        ${fl.length ? `<span class="small" style="color:var(--warn)">⚠ ${esc(fl.map(flagText).join(" · "))}</span>` : `<span class="small" style="color:var(--ok)">✓ ${t("noFlags")}</span>`}</span>
+      <span class="row" style="flex-wrap:nowrap">${!fl.length && !isSelf(e) ? `<button class="btn btn-secondary" data-act="quickok" data-id="${esc(e.id)}">${t("quickOk")}</button>` : ""}
+        <a class="btn ${fl.length ? "btn-primary" : "btn-ghost"}" href="#/positions/${esc(e.id)}/evaluate">${t("reviewBtn")}</a></span></div>`; }).join("")}</div>`
+    : `<div class="card"><div class="empty"><p>${t("reviewEmpty")}</p></div></div>`}`;
+}
+function buildEvaluation(e, scores, final, comments, adjustments, status) {
+  const st = scoreTotal(scores), rec = st.complete ? recommendGrade(st.total) : null;
+  return { scores, totalScore:st.total, recommendedGrade:rec, finalGrade:final || rec || "", comments:comments || "", approvalStatus:status,
+    adjustments, flags:reviewFlags(e).map(flagText), managerTotal:scoreTotal(e.managerEvaluation?.scores).total, review:true,
+    evaluationDate:today(), evaluatorName:S.profile?.displayName || S.user.email || "", evaluatorUid:S.user.uid };
+}
+async function quickConfirm(id) {
+  const e = await loadOne(id); if (!e) return;
+  if (reviewFlags(e).length) { location.hash = `#/positions/${id}/evaluate`; return; }
+  const sc = { ...e.managerEvaluation.scores }, rec = recommendGrade(scoreTotal(sc).total);
+  if (!(await confirmDlg(t("quickOkConfirm", { g:rec }), "", t("quickOk")))) return;
+  try {
+    await updateDoc(doc(db, "employees", id), { status:"director_approval", evaluation:buildEvaluation(e, sc, rec, "", {}, "director_approval"), profileChangedAfterApproval:null,
+      history:arrayUnion(histEntry("sent_to_director", `${scoreTotal(sc).total}/45 · ${rec}`)), updatedAt:serverTimestamp(), updatedBy:S.user.uid });
+    const n = await notify("approval_request", e, { roles:["hr_director"], grade:rec });
+    S.employees = null; toast(t("tSentToDirector") + mailNote(n), "ok"); render();
+  } catch (err) { toast(errMsg(err), "err"); }
+}
+async function scrEvaluate({ id, seq }) {
+  if (!canHREvaluate()) { toast(t("tNoAccessEval"), "warn"); location.replace(`#/positions/${id}`); return null; }
+  await loadEmployees();
+  const e = await loadOne(id);
+  if (seq !== renderSeq) return null;
+  if (!e) { toast(t("tNotFound"), "err"); location.replace("#/positions"); return null; }
+  if (isSelf(e)) { toast(t("conflictSelf"), "err"); location.replace(`#/positions/${id}`); return null; }
+  if (!scoreTotal(e.managerEvaluation?.scores).complete) { toast(t("noMgrScores"), "warn"); location.replace(`#/positions/${id}`); return null; }
+  if (!S.evalState || S.evalState.id !== id) {
+    const base = e.evaluation?.scores && scoreTotal(e.evaluation.scores).complete ? e.evaluation.scores : e.managerEvaluation.scores;
+    const reasons = Object.fromEntries(Object.entries(e.evaluation?.adjustments || {}).map(([k, v]) => [k, v.reason || ""]));
+    S.evalState = { id, e, scores:{ ...base }, reasons, finalGrade:e.evaluation?.finalGrade || "", finalTouched:!!e.evaluation?.finalGrade, comments:e.evaluation?.comments || "" };
+  } else S.evalState.e = e;
+  return evalHTML();
+}
+function evalHTML() {
+  const es = S.evalState, e = es.e, p = e.position || {}, ms = e.managerEvaluation.scores, h = profileHints(e), fl = reviewFlags(e);
+  const st = scoreTotal(es.scores), rec = st.complete ? recommendGrade(st.total) : null;
+  if (!es.finalTouched) es.finalGrade = rec || "";
+  const differs = rec && es.finalGrade && es.finalGrade !== rec, q = e.qualifications || {};
+  return `<div class="page-head"><div><div class="label-caps">${t("hrReview")}</div><h1>${esc(e.fullName)}</h1>
+    <p class="sub">${esc(p.jobTitle)} · ${esc(deptName(e.departmentId))} · ${esc(levelName(p.jobLevel))} · ${badge(e.status)}</p></div>
+    <a class="btn btn-ghost" href="#/positions/${esc(e.id)}">${t("viewFull")}</a></div>
+  ${e.finalApproval?.decision === "returned" ? `<div class="banner warn"><b>${t("dirReturnedBanner")}${e.finalApproval.byName ? " — " + esc(e.finalApproval.byName) : ""}</b>${esc(e.finalApproval.comment || "")}</div>` : ""}
+  ${fl.length ? `<div class="banner warn"><b>⚠ ${t("flagsTitle", { n:fl.length })}</b><ul class="small" style="margin:6px 0 0;padding-left:18px">${fl.map(x => `<li>${esc(flagText(x))}</li>`).join("")}</ul></div>`
+    : `<div class="banner info"><b>✓ ${t("noFlags")}</b><span class="small">${t("noFlagsHint")}</span></div>`}
+  <p class="small muted">${t("education")}: <b>${esc(optLabel("education", q.education) || "—")}</b> · ${esc(fl0(QUAL.fields[2]))}: <b>${esc(q.experienceYears ?? "—")}</b> · ${t("required")}: ${esc(optLabel("education", e.knowledge?.minEducation) || "—")}, ${esc(e.knowledge?.experienceYears ?? "—")}</p>
+  <section class="card" style="padding:0"><div class="table-wrap-always"><table class="tbl cmp review-tbl"><thead><tr><th>${t("factor")}</th><th>${t("profileHint")}</th><th>${t("mgrScore")}</th><th>${t("hrReviewCol")}</th><th>${t("pgReason")}</th></tr></thead><tbody>
+    ${FACTORS.map(f => { const m = Number(ms[f.key]), v = Number(es.scores[f.key]), ch = v !== m, dev = needsJustification(m, h[f.key]);
+      return `<tr class="${ch ? "changed" : ""}"><td><b>${esc(L(f))}</b>${e.managerEvaluation.justifications?.[f.key] ? `<div class="small muted">“${esc(e.managerEvaluation.justifications[f.key])}”</div>` : ""}</td>
+      <td>${h[f.key] ?? "—"}</td><td class="${dev ? "gapwarn" : ""}">${m}</td>
+      <td><select data-rv="${f.key}" aria-label="${esc(L(f))}">${[1, 2, 3, 4, 5].map(n => `<option ${n === v ? "selected" : ""}>${n}</option>`).join("")}</select></td>
+      <td>${ch ? `<input type="text" data-rvr="${f.key}" value="${esc(es.reasons[f.key] || "")}" aria-label="${t("pgReason")}" class="${(es.reasons[f.key] || "").trim() ? "" : "invalid"}" placeholder="${t("reasonReq")}">` : `<span class="muted small">—</span>`}</td></tr>`; }).join("")}
+    <tr class="tot"><td><b>${t("totalScore")}</b></td><td></td><td><b>${scoreTotal(ms).total}</b></td><td><b>${st.total}</b></td><td></td></tr></tbody></table></div></section>
+  <div class="grade-grid" style="margin-top:16px">
+    <section class="card stack"><div><div class="label-caps">${t("recommended")}</div><div style="margin-top:6px">${pill(rec)} <span class="small muted">${bandText(rec)}</span></div></div>
+      <div class="field"><label for="evFinal">${t("finalApproved")}</label><select id="evFinal" data-ev="finalGrade">${gradeOptions(es.finalGrade, t("select"))}</select>
+        ${es.finalGrade && p.jobLevel && !inRange(es.finalGrade, p.jobLevel) ? `<span class="hint" style="color:var(--warn)">⚠ ${t("outOfRange")}</span>` : ""}</div>
+      <div class="field ${differs && !es.comments.trim() ? "invalid" : ""}"><label for="evComments">${t("comments")}${differs ? ` <span class="req">*</span>` : ""}</label>
+        <textarea id="evComments" data-ev="comments">${esc(es.comments)}</textarea>${differs ? `<span class="hint">${t("explainDiff")}</span>` : ""}</div></section>
+    <section class="card">${consistencyHTML({ ...e, evaluation:{ ...(e.evaluation || {}), finalGrade:es.finalGrade } })}</section></div>
+  <div class="actionbar">
+    <a class="btn btn-ghost" href="#/review">${t("cancel")}</a>
+    <button type="button" class="btn btn-warn" data-act="evreturn">${t("returnChanges")}</button>
+    <button type="button" class="btn btn-secondary" data-act="evsave">${t("save")}</button>
+    <button type="button" class="btn btn-primary" data-act="evsend">${t("sendToDirector")}</button></div>`;
+}
+const fl0 = f => fl(f);
+function rerenderEval() {
+  const y = window.scrollY, aid = document.activeElement?.id, rv = document.activeElement?.dataset?.rvr;
+  $("#main").innerHTML = evalHTML(); $$("textarea").forEach(autoGrow); window.scrollTo(0, y);
+  const el = aid ? document.getElementById(aid) : rv ? $(`[data-rvr="${rv}"]`) : null; if (el) el.focus({ preventScroll:true });
+}
+function focusInvalid(id) { const el = document.getElementById(id); el?.closest(".field")?.classList.add("invalid"); el?.scrollIntoView({ block:"center" }); el?.focus({ preventScroll:true }); }
+async function saveEval(mode) {
+  const es = S.evalState, e = es.e, ms = e.managerEvaluation.scores;
+  const st = scoreTotal(es.scores), rec = st.complete ? recommendGrade(st.total) : null, comment = es.comments.trim();
+  const adjustments = {};
+  for (const f of FACTORS) {
+    const from = Number(ms[f.key]), to = Number(es.scores[f.key]);
+    if (from !== to) { const reason = (es.reasons[f.key] || "").trim(); if (mode !== "return" && !reason) { toast(t("tNeedAdjReason"), "err"); $(`[data-rvr="${f.key}"]`)?.focus(); return; } adjustments[f.key] = { from, to, reason }; }
+  }
+  if (mode === "send") {
+    if (!es.finalGrade) { toast(t("tNeedAll"), "err"); return; }
+    if (rec && es.finalGrade !== rec && !comment) { toast(`${t("tNeedComment")} — ${t("explainDiff")}`, "err"); focusInvalid("evComments"); return; }
+    if (!(await confirmDlg(t("confirmSendDir", { g:es.finalGrade }), "", t("sendToDirector")))) return;
+  }
+  if (mode === "return") {
+    if (!comment) { toast(t("tNeedComment"), "err"); focusInvalid("evComments"); return; }
+    if (!(await confirmDlg(t("confirmReturn"), "", t("returnChanges")))) return;
+  }
+  const status = mode === "send" ? "director_approval" : mode === "return" ? "returned" : "under_evaluation";
+  const scores = Object.fromEntries(FACTORS.map(f => [f.key, Number(es.scores[f.key])]));
+  const upd = { status, evaluation:buildEvaluation(e, scores, es.finalGrade, comment, adjustments, status), updatedAt:serverTimestamp(), updatedBy:S.user.uid, profileChangedAfterApproval:null,
+    history:arrayUnion(histEntry(mode === "send" ? "sent_to_director" : mode === "return" ? "returned_to_manager" : "hr_saved",
+      mode === "return" ? comment : `${st.total}/45 · ${es.finalGrade || rec || ""}${Object.keys(adjustments).length ? ` · ${Object.keys(adjustments).length} ${t("adjCount")}` : ""}`)) };
+  if (mode === "return") upd.returnComment = comment;
+  $$(".actionbar .btn").forEach(b => b.disabled = true);
+  try {
+    await updateDoc(doc(db, "employees", e.id), upd);
+    let n = 0;
+    if (mode === "send") n = await notify("approval_request", e, { roles:["hr_director"], grade:es.finalGrade });
+    if (mode === "return") n = await notify("evaluation_returned", e, { roles:["manager"], dept:e.departmentId, comment });
+    S.employees = null; S.evalState = null;
+    toast((mode === "send" ? t("tSentToDirector") : mode === "return" ? t("tReturned") : t("tSaved")) + mailNote(n), "ok");
+    location.hash = mode === "save" ? `#/positions/${e.id}` : "#/review";
+  } catch (err) { toast(errMsg(err), "err"); $$(".actionbar .btn").forEach(b => b.disabled = false); }
+}
+function adjustmentsHTML(ev) {
+  const a = Object.entries(ev?.adjustments || {});
+  if (!a.length) return "";
+  return `<div class="banner info" style="margin-top:12px"><b>${t("hrAdjusted")}</b><ul class="small" style="margin:4px 0 0;padding-left:18px">${a.map(([k, v]) => `<li><b>${esc(L(FACTORS.find(f => f.key === k)))}</b>: ${v.from} → ${v.to} — ${esc(v.reason || "")}</li>`).join("")}</ul></div>`;
+}
+
+// ---------- Reports (list) ----------
+async function scrReports() {
+  await loadEmployees(true);
+  const a = S.repA, b = S.repB, list = scopeList(S.employees || []);
+  const row = (n, title, desc, controls, actions) => `<div class="rep-row"><div class="rep-t"><span class="rep-n">${n}</span><div><b>${title}</b><span>${desc}</span></div></div>
+    <div class="rep-c">${controls}</div><div class="rep-a">${actions}</div></div>`;
+  const sel = (id, rep, opts, lbl) => `<label class="sr" for="${id}">${lbl}</label><select id="${id}" data-rep="${rep}" aria-label="${lbl}">${opts}</select>`;
+  const prevDl = (pv, dl, extra = "") => `<button class="btn btn-ghost" data-act="${pv}" ${extra}>${t("previewBtn")}</button><button class="btn btn-primary" data-act="${dl}" ${extra}>${icon("export")} Excel</button>`;
+  return `<div class="page-head"><div><h1>${t("reportsTitle")}</h1><p class="sub">${t("reportsSub")}</p>${isMgr() ? `<p class="small muted">${t("myDeptOnly")}</p>` : ""}</div></div>
+  <div class="card rep-list">
+    ${row("A", t("repA"), t("repADesc"), sel("ra-d", "A.dept", deptOptions(a.dept), t("department")) + sel("ra-s", "A.status", statusOptions(a.status), t("status")) + sel("ra-g", "A.grade", gradeOptions(a.grade), t("grade")), prevDl("exportA-pv", "exportA"))}
+    ${row("B", t("repB"), t("repBDesc"), sel("rb-d", "B.dept", deptOptions(b.dept), t("department")) + sel("rb-s", "B.status", statusOptions(b.status), t("status")), prevDl("exportB-pv", "exportB"))}
+    ${row("C", t("repC"), t("repCDesc2"), `<label class="sr" for="rc-p">${t("navPositions")}</label><select id="rc-p" aria-label="${t("navPositions")}"><option value="">${t("select")}</option>${sortByUpdated(list).map(e => `<option value="${esc(e.id)}">${esc(e.fullName)} — ${esc(e.position?.jobTitle || "")}</option>`).join("")}</select>`,
+      `<button class="btn btn-ghost" data-act="exportC-sel-pv">${t("previewBtn")}</button><button class="btn btn-primary" data-act="exportC-sel">${icon("export")} Excel</button>`)}
+    ${row("D", t("histTitle"), t("histDesc"), "", `<a class="btn btn-ghost" href="#/reports/history">${t("open")}</a><button class="btn btn-primary" data-act="exportH">${icon("export")} Excel</button>`)}
+    ${row("E", t("statsTitle"), t("statsDesc"), "", `<a class="btn btn-primary" href="#/reports/stats">${t("open")}</a>`)}
+    ${row("F", t("salaryTitle"), t("salaryDesc"), "", `<a class="btn btn-ghost" href="#/salary">${t("open")}</a><button class="btn btn-primary" data-act="exportSalary">${icon("export")} Excel</button>`)}
+  </div>`;
+}
+// Statistics (former dashboard)
+async function scrStats() {
+  const list = await loadEmployees(true);
+  const count = s => list.filter(e => e.status === s).length;
+  const stats = [["total", t("totalPositions"), list.length], ["submitted", statusLabel("submitted"), count("submitted") + count("under_evaluation")],
+    ["director_approval", statusLabel("director_approval"), count("director_approval")], ["approved", statusLabel("approved"), count("approved")]];
+  const byGrade = GRADES.map(g => [g, list.filter(e => e.status === "approved" && finalOf(e) === g).length]);
+  const max = Math.max(1, ...byGrade.map(x => x[1]));
+  return `<div class="no-print" style="margin-bottom:12px"><a href="#/reports" class="small">← ${t("navReports")}</a></div>
+  <div class="page-head"><div><h1>${t("statsTitle")}</h1>${isMgr() ? `<p class="sub">${t("myDeptOnly")}</p>` : ""}</div></div>
+  <div class="stats stats4">${stats.map(([k, lbl, n]) => `<div class="card stat"><span class="ic" aria-hidden="true">${icon(k)}</span><div><div class="num">${n}</div><div class="lbl">${esc(lbl)}</div></div></div>`).join("")}</div>
+  <section class="card"><div class="label-caps">${t("gradeDistSub")}</div><h2>${t("gradeDist")}</h2>
+    <div class="bars">${byGrade.map(([g, n]) => `<div class="bar-row bar-row-w"><span><b>${g}</b></span><div class="bar-track" role="img" aria-label="${g}: ${n}"><div class="bar-fill" style="width:${(n / max) * 100}%"></div></div><span class="v">${n}</span><span class="small muted">${bandText(g)}</span></div>`).join("")}</div></section>
+  ${isDirector() ? evaluatorStatsHTML(list) : ""}`;
+}
 function evaluatorStatsHTML(list) {
   const rows = {};
-  const add = (name, type, sc, other, hints, flagged) => {
-    if (!sc || !scoreTotal(sc).complete) return;
-    const k = type + "|" + (name || "—"), r = rows[k] ??= { name:name || "—", type, n:0, tot:0, dev:0, devN:0, gap:0, gapN:0, flags:0 };
-    r.n++; r.tot += scoreTotal(sc).total;
-    FACTORS.forEach(f => { if (hints[f.key]) { r.dev += Number(sc[f.key]) - hints[f.key]; r.devN++; } });
-    if (other && scoreTotal(other).complete) { r.gap += scoreTotal(sc).total - scoreTotal(other).total; r.gapN++; }
-    if (flagged) r.flags++;
-  };
   list.forEach(e => {
-    const h = profileHints(e), cal = calibration(e.managerEvaluation?.scores, e.evaluation?.scores);
-    add(e.managerEvaluation?.evaluatorName, "mgr", e.managerEvaluation?.scores, e.evaluation?.scores, h, cal?.flagged);
-    add(e.evaluation?.evaluatorName, "hr", e.evaluation?.scores, e.managerEvaluation?.scores, h, cal?.flagged);
+    const me = e.managerEvaluation; if (!me?.scores || !scoreTotal(me.scores).complete) return;
+    const k = me.evaluatorName || "—", r = rows[k] ??= { name:k, n:0, tot:0, dev:0, devN:0, adj:0, flags:0 };
+    const h = profileHints(e); r.n++; r.tot += scoreTotal(me.scores).total;
+    FACTORS.forEach(f => { if (h[f.key]) { r.dev += Number(me.scores[f.key]) - h[f.key]; r.devN++; } });
+    r.adj += Object.keys(e.evaluation?.adjustments || {}).length; r.flags += reviewFlags(e).length ? 1 : 0;
   });
-  const fmt = x => (x > 0 ? "+" : "") + x.toFixed(1);
-  const data = Object.values(rows).sort((a, b) => b.n - a.n);
-  return `<section class="card" style="margin-top:16px"><h2>${t("evalStats")}</h2><p class="small muted">${t("evalStatsDesc")}</p>
-    ${data.length ? `<div class="table-wrap-always"><table class="tbl cmp"><thead><tr><th>${t("stEvaluator")}</th><th>${t("stType")}</th><th>${t("stCount")}</th><th>${t("stAvg")}</th><th>${t("stDev")}</th><th>${t("stGap")}</th><th>${t("stFlag")}</th></tr></thead><tbody>
-    ${data.map(r => { const dev = r.devN ? r.dev / r.devN : 0, gap = r.gapN ? r.gap / r.gapN : 0;
-      return `<tr><td>${esc(r.name)}</td><td>${r.type === "mgr" ? t("mgrScore") : "HR"}</td><td>${r.n}</td><td>${(r.tot / r.n).toFixed(1)}</td>
-      <td class="${Math.abs(dev) >= 0.75 ? "gapwarn" : ""}">${r.devN ? fmt(dev) + "/" + (S.lang === "en" ? "factor" : "faktor") : "—"}</td><td class="${Math.abs(gap) >= 3 ? "gapwarn" : ""}">${r.gapN ? fmt(gap) : "—"}</td><td>${r.flags}</td></tr>`; }).join("")}
-    </tbody></table></div>` : `<p class="muted">${t("noScores")}</p>`}</section>`;
+  const fmt = x => (x > 0 ? "+" : "") + x.toFixed(1), data = Object.values(rows).sort((a, b) => b.n - a.n);
+  return `<section class="card" style="margin-top:16px"><h2>${t("evalStats")}</h2><p class="small muted">${t("evalStatsDesc2")}</p>
+    ${data.length ? `<div class="table-wrap-always"><table class="tbl cmp"><thead><tr><th>${t("mgrScore")}</th><th>${t("stCount")}</th><th>${t("stAvg")}</th><th>${t("stDev")}</th><th>${t("stAdj")}</th><th>${t("stFlagged")}</th></tr></thead><tbody>
+    ${data.map(r => { const dev = r.devN ? r.dev / r.devN : 0; return `<tr><td>${esc(r.name)}</td><td>${r.n}</td><td>${(r.tot / r.n).toFixed(1)}</td>
+      <td class="${Math.abs(dev) >= 0.75 ? "gapwarn" : ""}">${r.devN ? fmt(dev) : "—"}</td><td>${r.adj}</td><td>${r.flags}</td></tr>`; }).join("")}</tbody></table></div>` : `<p class="muted">${t("noScores")}</p>`}</section>`;
 }
+// History (all positions)
+function historyRows() {
+  const f = S.histF || {};
+  return scopeList(S.employees || []).flatMap(e => (e.history || []).map(h => ({ e, h })))
+    .filter(({ e, h }) => (!f.dept || e.departmentId === f.dept) && (!f.q || [e.fullName, e.position?.jobTitle, h.byName, h.note].join(" ").toLowerCase().includes(f.q.toLowerCase())))
+    .sort((a, b) => String(b.h.at).localeCompare(String(a.h.at)));
+}
+async function scrHistory() {
+  await loadEmployees(true);
+  S.histF = S.histF || { dept:"", q:"" };
+  return `<div class="no-print" style="margin-bottom:12px"><a href="#/reports" class="small">← ${t("navReports")}</a></div>
+  <div class="page-head"><div><h1>${t("histTitle")}</h1><p class="sub">${t("histDesc")}</p></div>
+    <div class="row"><button class="btn btn-ghost" data-act="exportH-pv">${t("previewBtn")}</button><button class="btn btn-primary" data-act="exportH">${icon("export")} Excel</button></div></div>
+  <div class="card" style="padding:16px;margin-bottom:16px"><div class="toolbar" style="margin:0">
+    <div class="field search"><label for="hq">${t("search")}</label><input id="hq" type="search" data-hist="q" value="${esc(S.histF.q)}"></div>
+    <div class="field"><label for="hd">${t("department")}</label><select id="hd" data-hist="dept">${deptOptions(S.histF.dept)}</select></div></div></div>
+  <div id="histResults"></div>`;
+}
+function renderHistory() {
+  const box = $("#histResults"); if (!box) return;
+  const rows = historyRows();
+  box.innerHTML = rows.length ? `<div class="card" style="padding:0"><div class="table-wrap-always"><table class="tbl cmp"><thead><tr><th>${t("mailDate")}</th><th>${t("employee")}</th><th>${t("jobTitle")}</th><th>${t("history")}</th><th>${t("evaluator")}</th><th>${t("dirComment")}</th></tr></thead><tbody>
+    ${rows.slice(0, 300).map(({ e, h }) => `<tr data-go="#/positions/${esc(e.id)}" style="cursor:pointer"><td class="small">${esc(String(h.at || "").replace("T", " ").slice(0, 16))}</td><td><b>${esc(e.fullName)}</b></td><td class="small">${esc(e.position?.jobTitle || "")}</td>
+      <td>${esc(t("h_" + h.action))}</td><td class="small">${esc(h.byName || "")}</td><td class="small">${esc(h.note || "")}</td></tr>`).join("")}</tbody></table></div></div>`
+    : `<div class="card"><div class="empty"><p class="muted">${t("noResults")}</p></div></div>`;
+}
+afterHooks.set(scrHistory, renderHistory);
+function exportHistory(preview) {
+  if (!xlsxReady()) return;
+  const hs = [t("mailDate"), fl(TOP_FIELDS[0]), t("employee"), t("jobTitle"), t("department"), t("history"), t("evaluator"), t("dirComment")];
+  const rows = historyRows().map(({ e, h }) => ({ [hs[0]]:String(h.at || "").replace("T", " ").slice(0, 16), [hs[1]]:e.employeeCode || "", [hs[2]]:e.fullName || "", [hs[3]]:e.position?.jobTitle || "",
+    [hs[4]]:deptName(e.departmentId), [hs[5]]:t("h_" + h.action), [hs[6]]:h.byName || "", [hs[7]]:h.note || "" }));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, makeSheet(rows, hs), t("history"));
+  finishExport(wb, `history-${stamp()}.xlsx`, preview);
+}
+
+// ---------- Library: departments on the left, titles table on the right ----------
+async function scrLibrary() {
+  if (isAdmin()) await loadEmployees();
+  await loadSalaryBands();
+  if (S.libEdit) return libEditPageHTML();
+  if (!S.libDept && !S.libQ) S.libDept = (isMgr() && myDept()) || DEPARTMENTS[0]?.code || "";
+  return `<div class="page-head"><div><h1>${t("libTitle")}</h1><p class="sub">${t("libSub")}</p></div>
+      ${isAdmin() ? `<button class="btn btn-ghost" data-act="libedit">✎ ${t("libEdit")}</button>` : ""}</div>
+    <div class="card" style="padding:12px 16px;margin-bottom:16px"><div class="field"><label for="libq" class="sr">${t("search")}</label>
+      <input id="libq" type="search" value="${esc(S.libQ)}" data-lib="q" autocomplete="off" placeholder="🔍 ${esc(t("libSearchPh"))}"></div></div>
+    <div class="lib-layout"><nav class="lib-side card" aria-label="${t("department")}">
+      <label class="sr" for="libSel">${t("department")}</label>
+      <select id="libSel" class="lib-select" data-libsel="1">${DEPARTMENTS.map(d => `<option value="${d.code}" ${S.libDept === d.code ? "selected" : ""}>${esc(L(d))} (${d.titles.length})</option>`).join("")}</select>
+      <div class="lib-depts">${DEPARTMENTS.map(d => `<button data-libdept="${d.code}" aria-pressed="${S.libDept === d.code && !S.libQ}"><span>${esc(L(d))}</span><span class="cnt">${d.titles.length}</span></button>`).join("")}</div></nav>
+      <div id="libResults" class="lib-main"></div></div>`;
+}
+function libTitleRows(d, titles) {
+  return titles.map(x => { const l = levelFor(x, d.code), jd = S.jdt?.[jdId(d.code, x)];
+    return `<tr><td><b>${esc(x)}</b>${S.libQ ? `<div class="small muted">${esc(L(d))}</div>` : ""}</td><td><span class="chip navy" title="${esc(L(LEVELS[l]))}">${l}</span></td><td>${rangeText(l)}</td>
+      <td class="small">${levelBandText(l)}</td><td>${jd?.fixedItems?.length ? `<span title="${esc(t("stdTitle"))}">🔒 v${jd.version || 1}</span>` : `<span class="muted small">—</span>`}</td>
+      <td><a class="btn btn-ghost btn-sm" href="#/library/jd/${encodeURIComponent(d.code)}/${encodeURIComponent(x)}">📄 ${t("jdOpen")}</a></td></tr>`; }).join("");
+}
+function renderLib() {
+  const box = $("#libResults"); if (!box) return;
+  if (S.libEdit) { box.innerHTML = libEditHTML(); $$("#libResults textarea").forEach(autoGrow); return; }
+  const head = `<thead><tr><th>${t("titleName")}</th><th>${t("level")}</th><th>${t("grade")}</th><th>${t("salaryCol")}</th><th>${t("stdCol")}</th><th></th></tr></thead>`;
+  const q = S.libQ.trim().toLowerCase();
+  if (q) {
+    const rows = DEPARTMENTS.map(d => libTitleRows(d, d.titles.filter(x => x.toLowerCase().includes(q) || L(d).toLowerCase().includes(q)))).join("");
+    box.innerHTML = rows ? `<div class="card" style="padding:0"><div class="table-wrap-always"><table class="tbl cmp lib-tbl">${head}<tbody>${rows}</tbody></table></div></div>` : `<div class="card"><div class="empty"><p>${t("noResults")}</p></div></div>`;
+    return;
+  }
+  const d = DEPT[S.libDept] || DEPARTMENTS[0]; if (!d) return;
+  box.innerHTML = `<div class="card" style="padding:0"><div class="lib-head"><div class="label-caps">${esc(d.code)} · ${d.titles.length} ${t("titlesCount")}</div>
+      <h2 style="margin:4px 0">${esc(L(d))}</h2><p class="small muted" style="margin:0">${esc(S.lang === "en" ? d.descEn : d.descAz)}</p></div>
+    <div class="table-wrap-always"><table class="tbl cmp lib-tbl">${head}<tbody>${libTitleRows(d, d.titles)}</tbody></table></div></div>`;
+}
+function libEditPageHTML() {
+  return `<div class="page-head"><div><h1>${t("libTitle")}</h1><p class="sub">${t("libSub")}</p></div>
+      <button class="btn btn-secondary" data-act="libadddept">${t("addDept")}</button></div>
+    <div class="banner info"><span class="small">${t("libEditHint")}</span></div>
+    <div class="dept-chips" role="group" aria-label="${t("department")}">
+      <button data-libdept="" aria-pressed="${!S.libDept}">${t("all")}</button>
+      ${S.libEdit.filter(d => d.code).map(d => `<button data-libdept="${esc(d.code)}" aria-pressed="${S.libDept === d.code}">${esc(d.code)} · ${esc(L(d))}</button>`).join("")}</div>
+    <div id="libResults"></div>
+    <div class="actionbar"><button class="btn btn-ghost" data-act="libcancel">${t("cancel")}</button>
+      <button class="btn btn-primary" data-act="libsave">${t("libSave")}</button></div>`;
+}
+afterHooks.set(scrLibrary, renderLib);
 
 // S10 — Admin → Users
 async function scrAdmin() {
@@ -2469,6 +2849,8 @@ async function loadSample() {
     const list = await loadEmployees(true);
     const codes = new Set(list.map(e => (e.employeeCode || "").trim()));
     let added = 0, skipped = 0;
+    for (const pp of samplePeople()) await setDoc(doc(db, "people", pp.code), { ...pp, updatedAt:serverTimestamp(), updatedBy:S.user.uid });
+    S.people = null;
     for (const rec of sampleRecords()) {
       if (codes.has(rec.employeeCode)) { skipped++; continue; }
       await addDoc(collection(db, "employees"), { ...clone(rec), createdBy:S.user.uid, updatedBy:S.user.uid, createdAt:serverTimestamp(), updatedAt:serverTimestamp() });
@@ -2526,7 +2908,7 @@ function exportA(filters, preview) {
     level:fl(SECTIONS[0].fields[4]), cur:fl(SECTIONS[0].fields[3]), total:H("Total Score","Ümumi bal"), rec:H("Recommended Grade","Tövsiyə olunan dərəcə"),
     fin:H("Final Grade","Yekun dərəcə"), st:t("status"), date:H("Evaluation Date","Qiymətləndirmə tarixi"), ev:H("Evaluator","Qiymətləndirici") };
   const fh = FACTORS.map(f => L(f));
-  const headers = [c.code, c.name, c.pid, c.title, c.dept, c.level, c.cur, ...fh, H("Manager Total","Menecer cəmi"), c.total, H("Gap (HR − Manager)","Fərq (HR − Menecer)"), H("Calibration flag","Kalibrasiya"), c.rec, c.fin, t("fitTitle"), t("personalGrade"), c.st, c.date, c.ev];
+  const headers = [c.code, c.name, c.pid, c.title, c.dept, c.level, c.cur, ...fh, H("Manager Total","Menecer cəmi"), c.total, H("Gap (HR − Manager)","Fərq (HR − Menecer)"), H("Calibration flag","Kalibrasiya"), c.rec, c.fin, t("salaryCol"), t("fitTitle"), t("personalGrade"), t("salaryZone"), c.st, c.date, c.ev];
   const rows = list.map(e => {
     const ev = e.evaluation || {}, p = e.position || {};
     const r = { [c.code]:e.employeeCode || "", [c.name]:e.fullName || "", [c.pid]:p.positionId || "", [c.title]:p.jobTitle || "", [c.dept]:deptName(e.departmentId),
@@ -2538,6 +2920,7 @@ function exportA(filters, preview) {
     r[H("Gap (HR − Manager)","Fərq (HR − Menecer)")] = cal ? cal.totalGap : "";
     r[H("Calibration flag","Kalibrasiya")] = cal ? (cal.flagged ? H("Yes","Bəli") : H("No","Xeyr")) : "";
     const pf = personalFit(e); r[t("fitTitle")] = pf.state === "unknown" ? "" : t("fit_" + pf.state); r[t("personalGrade")] = personalGradeOf(e) || "";
+    r[t("salaryCol")] = ev.finalGrade ? bandText(ev.finalGrade) : ""; r[t("salaryZone")] = e.status === "approved" ? personalZone(e) : "";
     Object.assign(r, { [c.total]:ev.scores ? (ev.totalScore ?? st.total) : "", [c.rec]:ev.recommendedGrade || "", [c.fin]:ev.finalGrade || "", [c.st]:statusLabel(e.status),
       [c.date]:ev.evaluationDate || "", [c.ev]:ev.evaluatorName || "" });
     return r;
@@ -2668,7 +3051,8 @@ document.addEventListener("click", async ev => {
   }
   if (el.dataset.sort) { const k = el.dataset.sort; S.sort = { key:k, dir:S.sort.key === k ? -S.sort.dir : 1 }; renderPosResults(); return; }
   if (el.dataset.pvtab !== undefined) { pvShow(Number(el.dataset.pvtab)); return; }
-  if (el.dataset.libdept !== undefined) { S.libDept = el.dataset.libdept; $$("[data-libdept]").forEach(b => b.setAttribute("aria-pressed", b.dataset.libdept === S.libDept)); renderLib(); return; }
+  if (el.dataset.libdept !== undefined) { S.libDept = el.dataset.libdept; S.libQ = ""; const qi = $("#libq"); if (qi) qi.value = ""; const ls = $("#libSel"); if (ls) ls.value = S.libDept;
+    $$("[data-libdept]").forEach(b => b.setAttribute("aria-pressed", b.dataset.libdept === S.libDept)); renderLib(); return; }
   const act = el.dataset.act;
   switch (act) {
     case "lang": setLang(el.dataset.v); break;
@@ -2679,7 +3063,7 @@ document.addEventListener("click", async ev => {
     case "signin": signIn(); break;
     case "signout": ev.preventDefault(); doSignOut(); break;
     case "reload": render(); break;
-    case "refreshProfile": try { await ensureProfile(S.user); S.employees = null; if (role() !== "pending") location.hash = "#/dashboard"; else { toast(t("pendingText")); } render(); } catch (e) { toast(errMsg(e), "err"); } break;
+    case "refreshProfile": try { await ensureProfile(S.user); S.employees = null; if (role() !== "pending") location.hash = "#/home"; else { toast(t("pendingText")); } render(); } catch (e) { toast(errMsg(e), "err"); } break;
     case "view": S.view = el.dataset.v; store.set("view", S.view); $$("[data-act=view]").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === S.view)); renderPosResults(); break;
     case "exportA-list": exportA(S.filters); break;
     case "exportA": exportA(S.repA); break;
@@ -2695,7 +3079,7 @@ document.addEventListener("click", async ev => {
       setTimeout(() => { const i = S.form.data.responsibilities.length - 1; document.getElementById(fid(`responsibilities.${i}.task`))?.focus(); }, 0); break;
     case "formcancel": {
       if (S.dirty && !(await confirmDlg(t("confirmLeave")))) break;
-      const id = S.form?.id; S.form = null; S.dirty = false; location.hash = id ? `#/positions/${id}` : "#/positions"; break;
+      const id = S.form?.id, wasGrade = S.form?.mode === "grade"; S.form = null; S.dirty = false; location.hash = wasGrade ? "#/grade" : id ? `#/positions/${id}` : "#/positions"; break;
     }
     case "savedraft": saveForm(false); break;
     case "submitform": saveForm(true); break;
@@ -2703,7 +3087,7 @@ document.addEventListener("click", async ev => {
     case "evsend": saveEval("send"); break;
     case "libedit": startLibEdit(); break;
     case "sharelink": copyShareLink(); break;
-    case "demoreset": if (await confirmDlg(t("resetDemo") + "?")) { await startDemo(false); location.hash = "#/dashboard"; render(); } break;
+    case "demoreset": if (await confirmDlg(t("resetDemo") + "?")) { await startDemo(false); location.hash = "#/home"; render(); } break;
     case "libcancel": S.libEdit = null; render(); break;
     case "libsave": saveLibrary(); break;
     case "libadddept": S.libEdit.push({ code:"", en:"", az:"", descEn:"", descAz:"", isNew:true, rows:[] }); S.libDept = "";
@@ -2717,11 +3101,19 @@ document.addEventListener("click", async ev => {
       S.libEdit[ci].rows.push({ name:v, level:"" }); rerenderLibEdit(`lnew-${ci}`); break;
     }
 
-    case "evreveal": if (scoreTotal(S.evalState.scores).complete) { S.evalState.revealed = true; S.evalState.blind = { ...S.evalState.scores }; rerenderEval(); } break;
     case "dirapprove": directorDecide(el.dataset.id, "approved"); break;
     case "dirreturn": directorDecide(el.dataset.id, "returned"); break;
     case "mailtpl": installMailTemplates(); break;
     case "jdsave": saveJd(false); break;
+    case "quickok": quickConfirm(el.dataset.id); break;
+    case "saveBands": saveBands(); break;
+    case "exportSalary": exportSalary(false); break;
+    case "exportH": exportHistory(false); break;
+    case "exportH-pv": exportHistory(true); break;
+    case "exportC-sel": case "exportC-sel-pv": { const v = $("#rc-p")?.value; if (!v) { toast(t("select"), "warn"); $("#rc-p")?.focus(); break; } exportC(v, act === "exportC-sel-pv"); break; }
+    case "peopleTpl": downloadPeopleTemplate(); break;
+    case "peopleImport": importPeople(); break;
+    case "peopleCancel": S.peopleImport = null; render(); break;
     case "pgsave": savePersonalGrade(el.dataset.id); break;
     case "stdupdate": {
       const d = S.form.data, cur = S.jdt?.[d.standard.templateId];
@@ -2754,7 +3146,12 @@ document.addEventListener("input", e => {
   const el = e.target;
   if (el.tagName === "TEXTAREA") autoGrow(el);
   if (el.dataset.filter) { S.filters[el.dataset.filter] = el.value; renderPosResults(); return; }
-  if (el.dataset.lib) { S.libQ = el.value; renderLib(); return; }
+  if (el.dataset.lib) { S.libQ = el.value; $$("[data-libdept]").forEach(b => b.setAttribute("aria-pressed", !S.libQ && b.dataset.libdept === S.libDept)); renderLib(); return; }
+  if (el.dataset.gq) { S.gradeQ = el.value; renderGradeList(); return; }
+  if (el.dataset.peopleq) { S.peopleQ = el.value; const q = el.value.toLowerCase(); $$("#peopleTbl tbody tr").forEach(tr => { tr.hidden = !!q && !tr.textContent.toLowerCase().includes(q); }); return; }
+  if (el.dataset.hist) { S.histF[el.dataset.hist] = el.value; renderHistory(); return; }
+  if (el.dataset.rvr && S.evalState) { S.evalState.reasons[el.dataset.rvr] = el.value; el.classList.toggle("invalid", !el.value.trim()); return; }
+  if (el.dataset.band) { const g = el.dataset.band.split(".")[0], mn = Number($(`[data-band="${g}.min"]`).value), mx = Number($(`[data-band="${g}.max"]`).value); const m = $("#mid-" + g); if (m) m.textContent = mn < mx ? fmtMoney(Math.round((mn + mx) / 2)) : "—"; return; }
   if (S.libEdit && el.dataset.le) { const [ci, k] = el.dataset.le.split("."); S.libEdit[ci][k] = k === "code" ? el.value.toUpperCase() : el.value; return; }
   if (S.libEdit && el.dataset.lt) { const [ci, ti] = el.dataset.lt.split(".").map(Number); S.libEdit[ci].rows[ti].name = el.value; return; }
   if (el.id === "titleSearch" && S.form) { S.form.titleSearch = el.value; rerenderForm(); return; }
@@ -2808,6 +3205,10 @@ document.addEventListener("change", e => {
   }
   if (S.libEdit && el.dataset.le) { syncLibChips(); return; }
   if (el.dataset.demorole) { switchDemoRole(el.value); return; }
+  if (el.dataset.gd !== undefined && el.id === "gd") { S.gradeDept = el.value; renderGradeList(); return; }
+  if (el.dataset.libsel) { S.libDept = el.value; S.libQ = ""; const qi = $("#libq"); if (qi) qi.value = ""; renderLib(); return; }
+  if (el.dataset.rv && S.evalState) { S.evalState.scores[el.dataset.rv] = Number(el.value); rerenderEval(); return; }
+  if (el.id === "peopleFile" && el.files?.[0]) { if (!xlsxReady()) return; readPeopleFile(el.files[0]).then(rows => { S.peopleImport = rows; render(); }).catch(e => toast(errMsg(e), "err")); return; }
   if (el.dataset.urole) { saveUser(el.dataset.urole, { role:el.value }); return; }
   if (el.dataset.udept) { saveUser(el.dataset.udept, { departmentId:el.value || null }); return; }
   if (el.dataset.unotify) { saveUser(el.dataset.unotify, { notifyEmail:el.value }); return; }
@@ -2850,7 +3251,7 @@ document.addEventListener("change", e => {
 window.addEventListener("beforeunload", e => { if (S.dirty && S.form) { e.preventDefault(); e.returnValue = ""; } });
 window.addEventListener("hashchange", () => {
   const { path } = parseHash();
-  if (S.form && !/^#\/positions\/(new|[^/]+\/edit)$/.test(path)) { S.form = null; S.dirty = false; }
+  if (S.form && !/^#\/positions\/(new|[^/]+\/edit)$/.test(path) && !(S.form.mode === "grade" && path === "#/grade/" + encodeURIComponent(S.form.data.personCode || "")) && !(S.form.mode === "grade" && path === "#/grade/" + (S.form.data.personCode || ""))) { S.form = null; S.dirty = false; }
   if (S.evalState && !/\/evaluate$/.test(path)) S.evalState = null;
   if (S.libEdit && path !== "#/library") S.libEdit = null;
   if (S.jdEdit && !path.startsWith("#/library/jd/")) S.jdEdit = null;
@@ -2868,14 +3269,14 @@ if (hasDemo) { startDemo(true).then(() => render()); } else render();
 getRedirectResult(auth).catch(e => { if (e?.code) { S.loginError = `${t("tSignInFailed")}: ${e.code}`; render(); } });
 onAuthStateChanged(auth, async u => {
   if (DEMO.on) return;  // demo session has its own user
-  S.user = u; S.employees = null; S.users = null;
+  S.user = u; S.employees = null; S.users = null; S.people = null;
   if (u) {
-    try { await ensureProfile(u); if (role() !== "pending") { await loadLibrary(); await loadJobTemplates(); } }
+    try { await ensureProfile(u); if (role() !== "pending") { await loadLibrary(); await loadJobTemplates(); await loadSalaryBands(); } }
     catch (e) { console.error(e); S.profile = { role:"pending" }; toast(errMsg(e), "err"); }
   } else S.profile = null;
   S.authReady = true;
   let after = false; try { after = !!sessionStorage.getItem("gs.afterLogin"); sessionStorage.removeItem("gs.afterLogin"); } catch {}
-  if (u && after && parseHash().path === "#/login") { location.replace(role() === "pending" ? "#/pending" : "#/dashboard"); return; }
+  if (u && after && parseHash().path === "#/login") { location.replace(role() === "pending" ? "#/pending" : "#/home"); return; }
   render();
 });
 
