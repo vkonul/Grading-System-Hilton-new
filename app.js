@@ -601,6 +601,12 @@ const STR = {
   errTitle:["missing job title","vəzifə yoxdur"], errEdu:["unknown education","təhsil tanınmadı"], errExp:["missing experience","təcrübə yoxdur"],
   libSearchPh:["Search all job titles","Bütün vəzifələrdə axtar"], evalStatsDesc2:["How each manager scores compared with the job profile, and how often HR had to adjust.","Hər menecerin ballarının vəzifə profili ilə müqayisəsi və HR-ın nə qədər düzəliş etdiyi."],
   stAdj:["HR adjustments","HR düzəlişləri"], stFlagged:["Flagged","İşarələnmiş"],
+  whatTitle:["What is a grading system?","Grading sistemi nədir?"],
+  what1:["A grading system groups all jobs into levels (grades G1–G10) using one consistent evaluation of responsibility, complexity, required qualifications and decision-making.","Grading sistemi bütün vəzifələri məsuliyyət, mürəkkəblik, tələb olunan ixtisas və qərarvermə səviyyəsinin vahid qiymətləndirilməsi ilə dərəcələrə (G1–G10) bölür."],
+  what2:["Each grade has a pay range: minimum, midpoint and maximum.","Hər dərəcənin maaş aralığı var: minimum, orta və maksimum."],
+  what3:["Jobs of similar size sit in the same grade and are paid within the same range.","Oxşar çəkili vəzifələr eyni dərəcədə olur və eyni aralıqda ödənilir."],
+  what4:["Result: transparent, defensible pay decisions, fewer disputes, fair promotions and a clear career path.","Nəticə: şəffaf və əsaslandırılmış maaş qərarları, daha az mübahisə, ədalətli irəliləmə və aydın karyera yolu."],
+  what5:["It starts with job evaluation — measuring each job's relative size on 9 factors. That is what this platform does.","Başlanğıc nöqtəsi vəzifənin qiymətləndirilməsidir — hər vəzifənin nisbi çəkisi 9 faktor üzrə ölçülür. Bu platforma məhz bunu edir."],
   colSection:["Section","Bölmə"], colField:["Field","Sahə"], colValue:["Value","Dəyər"], general:["General","Ümumi"], no_:["No.","№"]
 };
 const I18N = { az:{}, en:{} };
@@ -1296,7 +1302,11 @@ function scrLogin() {
       <button data-act="lang" data-v="en" aria-pressed="${S.lang === "en"}">English</button></div>
     <div class="mono" aria-hidden="true">GS</div>
     <h1>${esc(t("appName"))}</h1>
-    <p class="muted" style="margin-bottom:24px">${esc(t("tagline"))}</p>
+    <button type="button" class="btn btn-ghost what-btn" data-act="whatis" aria-expanded="${!!S.whatOpen}" aria-controls="whatBox">ⓘ ${t("whatTitle")}</button>
+    <div class="what-box" id="whatBox" ${S.whatOpen ? "" : "hidden"}>
+      <p>${t("what1")}</p>
+      <ul>${["what2", "what3", "what4"].map(k => `<li>${t(k)}</li>`).join("")}</ul>
+      <p class="small muted" style="margin:0">${t("what5")}</p></div>
     ${signedIn ? `<p class="small muted" style="margin-bottom:10px">${esc(t("signedInAs"))} <b>${esc(S.profile?.displayName || S.user.email || "")}</b></p>
       <a class="btn btn-primary btn-block" href="${go}">${t("continueApp")} →</a>
       <button class="btn btn-ghost btn-block" data-act="signout" style="margin-top:8px">${t("signOut")}</button>`
@@ -3106,6 +3116,7 @@ document.addEventListener("click", async ev => {
     case "mailtpl": installMailTemplates(); break;
     case "jdsave": saveJd(false); break;
     case "quickok": quickConfirm(el.dataset.id); break;
+    case "whatis": { S.whatOpen = !S.whatOpen; const bx = $("#whatBox"); if (bx) bx.hidden = !S.whatOpen; el.setAttribute("aria-expanded", String(S.whatOpen)); break; }
     case "saveBands": saveBands(); break;
     case "exportSalary": exportSalary(false); break;
     case "exportH": exportHistory(false); break;
