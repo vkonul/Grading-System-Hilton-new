@@ -538,7 +538,7 @@ const STR = {
   jdHas:["Template: custom","Şablon: xüsusi"], jdReqs:["Requirements","Tələblər"], jdReadOnly:["Read-only — you can edit templates of your own department","Yalnız oxumaq üçün — öz departamentinizin şablonlarını redaktə edə bilərsiniz"],
   editAnyStatusInfo:["You can update the job description at any time. Scores and the grade are not changed.","Vəzifə təlimatını istənilən vaxt yeniləyə bilərsiniz. Ballar və dərəcə dəyişmir."],
   changedAfterApproval:["Job description changed after approval — consider re-evaluation","Vəzifə təlimatı təsdiqdən sonra dəyişdirilib — yenidən qiymətləndirməni nəzərdən keçirin"],
-  watchTour:["▶ Watch the 5-minute video tour (English)","▶ 5 dəqiqəlik video-tura bax (ingiliscə)"], videoShort:["▶ Video tour","▶ Video-tur"],
+  watchTour:["▶ Watch the 2.5-minute video tour (English)","▶ 2.5 dəqiqəlik video-tura bax (ingiliscə)"], videoShort:["▶ Video tour","▶ Video-tur"],
   stdTitle:["Fixed job standard","Vəzifənin sabit standartı"], stdInfo:["Defined by HR for this job title. It is the same for every position with this title and cannot be changed here. You can add position-specific KPI targets below each item.","HR tərəfindən bu vəzifə adı üçün müəyyən edilib. Bu adlı bütün vəzifələrdə eynidir və burada dəyişdirilə bilməz. Hər bəndin altına vəzifəyə xas KPI hədəfi əlavə edə bilərsiniz."],
   stdUpdate:["Update to standard v{v}","Standart v{v}-ə yenilə"], stdUpdated:["A newer job standard exists","Vəzifə standartının yeni versiyası var"], tStdUpdated:["Job standard updated — review and save","Vəzifə standartı yeniləndi — yoxlayıb yadda saxlayın"],
   kpiExtra:["Position-specific KPI target","Vəzifəyə xas KPI hədəfi"], kpiExtraHint:["Optional — adds to the fixed KPI, does not replace it","İstəyə bağlı — sabit KPI-ı əvəz etmir, ona əlavə olunur"],
@@ -1068,7 +1068,7 @@ function personalFitHTML(e) {
     <p class="small muted">${jg ? t("fitRule") : t("noJobGrade")}</p>
     ${pg?.grade ? `<p class="small"><b>${t("pgOverride")}:</b> ${esc(pg.grade)} — ${esc(pg.reason || "")} <span class="muted">(${esc(pg.byName || "")}, ${esc(pg.date || "")})</span></p>` : ""}
     ${isHR() && jg ? `<div class="row" style="align-items:flex-end;margin-top:10px">
-      <div class="field" style="flex:0 1 200px"><label for="pgSel">${t("personalGrade")}</label><select id="pgSel"><option value="">${t("pgAuto")}: ${esc(auto || "—")}</option>${grades.map(g => `<option ${pg?.grade === g ? "selected" : ""}>${g}</option>`).join("")}</select></div>
+      <div class="field" style="flex:0 1 280px"><label for="pgSel">${t("personalGrade")}</label><select id="pgSel"><option value="">${t("pgAuto")}: ${esc(auto || "—")}</option>${grades.map(g => `<option ${pg?.grade === g ? "selected" : ""}>${g}</option>`).join("")}</select></div>
       <div class="field" style="flex:1 1 240px"><label for="pgReason">${t("pgReason")}</label><input type="text" id="pgReason" value="${esc(pg?.reason || "")}"></div>
       <button class="btn btn-secondary" data-act="pgsave" data-id="${esc(e.id)}">${t("pgSave")}</button></div>` : ""}
   </section>`;
