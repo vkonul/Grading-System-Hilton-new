@@ -51,7 +51,7 @@ service cloud.firestore {
 
     // Job description templates per title = the fixed job standard. Maintained by HR / Admin only.
     match /jobTemplates/{id} {
-      allow read: if isActive();
+      allow read: if isStaffHR() || (isManager() && resource.data.dept == me().departmentId);
       allow write: if isStaffHR();
     }
 

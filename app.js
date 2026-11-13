@@ -588,7 +588,7 @@ const STR = {
   salarySub:["Monthly gross pay range for every grade. Midpoint is calculated automatically.","Hər dərəcə üçün aylıq gross maaş aralığı. Orta nöqtə avtomatik hesablanır."],
   sMin:["Minimum","Minimum"], sMid:["Midpoint","Orta"], sMax:["Maximum","Maksimum"], sLevels:["Typical levels","Uyğun səviyyələr"], sCurrency:["Currency","Valyuta"],
   salaryNote:["Admin and HR can change the ranges. HR sees all grades; each department manager sees only the grades of their department.","Aralıqları Admin və HR dəyişə bilər. HR bütün dərəcələri, departament meneceri isə yalnız öz departamentinə aid dərəcələri görür."],
-  salaryOtherDept:["Salary ranges of other departments are not shown","Digər departamentlərin maaş aralıqları göstərilmir"], salaryMgrNote:["Only the grades used in {d} are shown.","Yalnız “{d}” departamentinə aid dərəcələr göstərilir."], tBandInvalid:["Check the range of {g}: minimum must be lower than maximum","{g} aralığını yoxlayın: minimum maksimumdan az olmalıdır"],
+  salaryOtherDept:["Salary ranges of other departments are not shown","Digər departamentlərin maaş aralıqları göstərilmir"], libMgrSub:["Job titles of {d}","“{d}” departamentinin vəzifələri"], salaryMgrNote:["Only the grades used in {d} are shown.","Yalnız “{d}” departamentinə aid dərəcələr göstərilir."], tBandInvalid:["Check the range of {g}: minimum must be lower than maximum","{g} aralığını yoxlayın: minimum maksimumdan az olmalıdır"],
   salaryCol:["Salary range","Maaş aralığı"], salaryZone:["Individual pay zone","Fərdi maaş zonası"],
   peopleTitle:["Employees","İşçilər"], peopleSub:["The employee list comes from one Excel file. Managers pick employees from it when grading.","İşçi siyahısı bir Excel faylından gəlir. Menecerlər qiymətləndirmədə bu siyahıdan seçir."],
   peopleImport:["Upload the employee Excel file","İşçi Excel faylını yüklə"], peopleStep1:["Download the template","Şablonu yükləyin"],
@@ -828,8 +828,8 @@ async function startDemo(resume = false) {
 }
 async function switchDemoRole(uid) {
   DEMO.uid = uid; demoSave();
-  S.user = demoUser(uid); S.profile = dclone(DEMO.db.users[uid]); S.employees = null; S.users = null; S.people = null; S.form = null; S.evalState = null; S.libEdit = null;
-  await loadSalaryBands();
+  S.user = demoUser(uid); S.profile = dclone(DEMO.db.users[uid]); S.employees = null; S.users = null; S.people = null; S.form = null; S.evalState = null; S.libEdit = null; S.libQ = "";
+  await loadSalaryBands(); await loadJobTemplates();
   toast(`${t("demoRole")}: ${S.profile.displayName}`, "ok");
   location.hash = "#/home"; render();
 }
@@ -1109,7 +1109,10 @@ function standardHTML(d) {
 const JD_REQ_FIELDS = ["minEducation", "experienceYears", "technicalSkills", "softwareSystems", "languages", "certifications"];
 const jdId = (dept, title) => `${dept}__${String(title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
 async function loadJobTemplates() {
-  try { S.jdt = Object.fromEntries((await getDocs(collection(db, "jobTemplates"))).docs.map(d => [d.id, d.data()])); } catch (e) { console.warn("jobTemplates", e); S.jdt = {}; }
+  try {
+    const src = isMgr() ? (myDept() ? query(collection(db, "jobTemplates"), where("dept", "==", myDept())) : null) : collection(db, "jobTemplates");
+    S.jdt = src ? Object.fromEntries((await getDocs(src)).docs.map(d => [d.id, d.data()])) : {};
+  } catch (e) { console.warn("jobTemplates", e); S.jdt = {}; }
 }
 // Template for a title: the custom one if saved, otherwise built from the level template
 function jdFor(dept, title) {
@@ -2101,7 +2104,7 @@ async function notify(name, e, o = {}) {
 
 // Job description template editor (#/library/jd/:dept/:title)
 async function scrJd({ id:dept, id2:title }) {
-  if (!DEPT[dept]) { location.replace("#/library"); return null; }
+  if (!DEPT[dept] || (isMgr() && dept !== myDept())) { location.replace("#/library"); return null; }
   if (!S.jdEdit || S.jdEdit.key !== jdId(dept, title)) {
     await loadJobTemplates();
     const jd = jdFor(dept, title);
@@ -2440,7 +2443,7 @@ async function scrHome() {
   if (isMgr()) tiles.push({ ic:"⏳", title:t("homeInProgress"), n:count("submitted") + count("under_evaluation") + count("director_approval"), href:"#/positions" });
   tiles.push({ ic:"✓", title:t("homeApproved"), n:count("approved"), href:"#/positions?status=approved" });
   const steps = [["1", t("step1"), t("step1d")], ["2", t("step2"), t("step2d")], ["3", t("step3"), t("step3d")], ["4", t("step4"), t("step4d")]];
-  const myName = (S.profile?.displayName || "").trim();
+  const myName = (S.profile?.displayName || "").trim().split(/\s+/)[0] || "";
   return `<div class="page-head"><div><h1>${t("hello")}${myName ? ", " + esc(myName) : ""}!</h1>
     <p class="sub">${esc(L(ROLES[role()]))}${isMgr() ? " · " + esc(deptName(myDept())) : ""}</p></div></div>
   ${isMgr() && !myDept() ? `<div class="banner warn"><b>${t("tNoDept")}</b></div>` : ""}
@@ -2764,7 +2767,12 @@ async function scrLibrary() {
   if (isAdmin()) await loadEmployees();
   await loadSalaryBands();
   if (S.libEdit) return libEditPageHTML();
-  if (!S.libDept && !S.libQ) S.libDept = (isMgr() && myDept()) || DEPARTMENTS[0]?.code || "";
+  if (isMgr()) S.libDept = myDept();
+  else if (!S.libDept && !S.libQ) S.libDept = DEPARTMENTS[0]?.code || "";
+  if (isMgr()) return `<div class="page-head"><div><h1>${t("libTitle")}</h1><p class="sub">${myDept() ? esc(t("libMgrSub", { d:deptName(myDept()) })) : t("tNoDept")}</p></div></div>
+    <div class="card" style="padding:12px 16px;margin-bottom:16px"><div class="field"><label for="libq" class="sr">${t("search")}</label>
+      <input id="libq" type="search" value="${esc(S.libQ)}" data-lib="q" autocomplete="off" placeholder="🔍 ${esc(t("search"))}"></div></div>
+    <div id="libResults"></div>`;
   return `<div class="page-head"><div><h1>${t("libTitle")}</h1><p class="sub">${t("libSub")}</p></div>
       ${isAdmin() ? `<button class="btn btn-ghost" data-act="libedit">✎ ${t("libEdit")}</button>` : ""}</div>
     <div class="card" style="padding:12px 16px;margin-bottom:16px"><div class="field"><label for="libq" class="sr">${t("search")}</label>
@@ -2787,7 +2795,7 @@ function renderLib() {
   const head = `<thead><tr><th>${t("titleName")}</th><th>${t("level")}</th><th>${t("grade")}</th><th>${t("salaryCol")}</th><th>${t("stdCol")}</th><th></th></tr></thead>`;
   const q = S.libQ.trim().toLowerCase();
   if (q) {
-    const rows = DEPARTMENTS.map(d => libTitleRows(d, d.titles.filter(x => x.toLowerCase().includes(q) || L(d).toLowerCase().includes(q)))).join("");
+    const rows = DEPARTMENTS.filter(d => !isMgr() || d.code === myDept()).map(d => libTitleRows(d, d.titles.filter(x => x.toLowerCase().includes(q) || L(d).toLowerCase().includes(q)))).join("");
     box.innerHTML = rows ? `<div class="card" style="padding:0"><div class="table-wrap-always"><table class="tbl cmp lib-tbl">${head}<tbody>${rows}</tbody></table></div></div>` : `<div class="card"><div class="empty"><p>${t("noResults")}</p></div></div>`;
     return;
   }
