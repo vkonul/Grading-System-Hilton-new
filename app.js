@@ -556,7 +556,7 @@ const STR = {
   noJobGrade:["The individual grade is calculated after the job grade is approved","Fərdi dərəcə vəzifə dərəcəsi təsdiqləndikdən sonra hesablanır"],
   preview:["Preview","Önizləmə"], previewBtn:["👁 Preview","👁 Önizlə"], download:["Download .xlsx","Excel-i yüklə"],
   signedInAs:["Signed in as","Daxil olmusunuz:"], continueApp:["Continue to the app","Sistemə keç"], continueDemo:["Continue the demo","Demoya davam et"],
-  navHome:["Home","Ana səhifə"], navReview:["HR review","HR yoxlaması"], gradeBtn:["Grade an employee","Grade ver"], education:["Education","Təhsil"], open:["Open","Aç"],
+  navHome:["Home","Ana səhifə"], navReview:["HR review","HR yoxlaması"], gradeBtn:["Grade an employee","Dərəcələndir"], education:["Education","Təhsil"], open:["Open","Aç"],
   hello:["Hello","Salam"], homeTodo:["What needs your attention","Nə etməlisiniz"], homeAdmin:["Administration","İdarəetmə"], howItWorks:["How it works","Necə işləyir"],
   homeGradeText:["{n} employee(s) in your team are not graded yet","Komandanızda {n} işçi hələ qiymətləndirilməyib"], homeDrafts:["Drafts","Qaralamalar"], homeReturned:["Returned to you for changes","Düzəliş üçün sizə qaytarılanlar"],
   homeReview:["Waiting for HR review","HR yoxlaması gözləyənlər"], homeReviewText:["{n} position(s) · {f} flagged by the system","{n} vəzifə · {f} sistem tərəfindən işarələnib"],
@@ -588,7 +588,7 @@ const STR = {
   salarySub:["Monthly gross pay range for every grade. Midpoint is calculated automatically.","Hər dərəcə üçün aylıq gross maaş aralığı. Orta nöqtə avtomatik hesablanır."],
   sMin:["Minimum","Minimum"], sMid:["Midpoint","Orta"], sMax:["Maximum","Maksimum"], sLevels:["Typical levels","Uyğun səviyyələr"], sCurrency:["Currency","Valyuta"],
   salaryNote:["Admin and HR can change the ranges. HR sees all grades; each department manager sees only the grades of their department.","Aralıqları Admin və HR dəyişə bilər. HR bütün dərəcələri, departament meneceri isə yalnız öz departamentinə aid dərəcələri görür."],
-  salaryMgrNote:["Only the grades used in {d} are shown.","Yalnız “{d}” departamentinə aid dərəcələr göstərilir."], tBandInvalid:["Check the range of {g}: minimum must be lower than maximum","{g} aralığını yoxlayın: minimum maksimumdan az olmalıdır"],
+  salaryOtherDept:["Salary ranges of other departments are not shown","Digər departamentlərin maaş aralıqları göstərilmir"], salaryMgrNote:["Only the grades used in {d} are shown.","Yalnız “{d}” departamentinə aid dərəcələr göstərilir."], tBandInvalid:["Check the range of {g}: minimum must be lower than maximum","{g} aralığını yoxlayın: minimum maksimumdan az olmalıdır"],
   salaryCol:["Salary range","Maaş aralığı"], salaryZone:["Individual pay zone","Fərdi maaş zonası"],
   peopleTitle:["Employees","İşçilər"], peopleSub:["The employee list comes from one Excel file. Managers pick employees from it when grading.","İşçi siyahısı bir Excel faylından gəlir. Menecerlər qiymətləndirmədə bu siyahıdan seçir."],
   peopleImport:["Upload the employee Excel file","İşçi Excel faylını yüklə"], peopleStep1:["Download the template","Şablonu yükləyin"],
@@ -771,14 +771,14 @@ const SAMPLE_DATA = [
 ];
 
 const DEMO_USERS = [
-  ["demo-admin", "Demo Admin", "admin", null],
-  ["demo-hrd", "Leyla Həsənova (HR direktoru)", "hr_director", null],
-  ["demo-hr", "Aynur Rzayeva (HR)", "hr", null],
-  ["demo-fo", "Front Office meneceri", "manager", "FO"],
-  ["demo-hk", "Housekeeping meneceri", "manager", "HK"],
-  ["demo-rev", "Revenue meneceri", "manager", "REV"],
-  ["demo-kit", "Mətbəx meneceri", "manager", "KIT"],
-  ["demo-hrm", "HR departament meneceri", "manager", "HR"]
+  ["demo-admin", "Rauf Babayev", "admin", null],
+  ["demo-hrd", "Leyla Həsənova", "hr_director", null],
+  ["demo-hr", "Aynur Rzayeva", "hr", null],
+  ["demo-fo", "Kamal Əhmədov", "manager", "FO"],
+  ["demo-hk", "Nərmin Vəliyeva", "manager", "HK"],
+  ["demo-rev", "Orxan Məmmədli", "manager", "REV"],
+  ["demo-kit", "Samir Qasımov", "manager", "KIT"],
+  ["demo-hrm", "Gülnar İsmayılova", "manager", "HR"]
 ];
 function demoSeed() {
   const now = Date.now(), db = { users:{}, employees:{} };
@@ -802,15 +802,15 @@ function demoSeed() {
     // Demo shows the full flow: EMP-003 was scored by both sides (with a calibration flag) and waits for the HR Director
     if (e.employeeCode === "EMP-003") {
       e.status = "director_approval"; e.evaluation.finalGrade = "G6"; e.evaluation.approvalStatus = "director_approval";
-      e.evaluation.evaluatorUid = "demo-hr"; e.evaluation.evaluatorName = "Aynur Rzayeva (HR)"; e.evaluation.review = true;
+      e.evaluation.evaluatorUid = "demo-hr"; e.evaluation.evaluatorName = "Aynur Rzayeva"; e.evaluation.review = true;
       e.evaluation.adjustments = { leadership:{ from:5, to:3, reason:"1 direct report — leadership 3 matches the profile" }, businessImpact:{ from:5, to:4, reason:"Impact is on rooms revenue, not hotel-wide" } };
       e.evaluation.flags = ["Leadership: score 5 vs profile 3"]; e.evaluation.managerTotal = 35;
-      e.managerEvaluation.evaluatorUid = "demo-rev"; e.managerEvaluation.evaluatorName = "Revenue meneceri";
-      e.history.push({ at:"2026-11-03T10:00:00.000Z", byName:"Revenue meneceri", role:"manager", action:"submitted", note:"35/45" },
-                     { at:"2026-11-10T15:30:00.000Z", byName:"Aynur Rzayeva (HR)", role:"hr", action:"sent_to_director", note:"32/45 · G6 · ⚠" });
+      e.managerEvaluation.evaluatorUid = "demo-rev"; e.managerEvaluation.evaluatorName = "Orxan Məmmədli";
+      e.history.push({ at:"2026-11-03T10:00:00.000Z", byName:"Orxan Məmmədli", role:"manager", action:"submitted", note:"35/45" },
+                     { at:"2026-11-10T15:30:00.000Z", byName:"Aynur Rzayeva", role:"hr", action:"sent_to_director", note:"32/45 · G6 · ⚠" });
     }
-    if (e.employeeCode === "EMP-002") { e.managerEvaluation.evaluatorUid = "demo-hk"; e.managerEvaluation.evaluatorName = "Housekeeping meneceri";
-      e.history.push({ at:"2026-11-08T11:00:00.000Z", byName:"Housekeeping meneceri", role:"manager", action:"submitted", note:"24/45" }); }
+    if (e.employeeCode === "EMP-002") { e.managerEvaluation.evaluatorUid = "demo-hk"; e.managerEvaluation.evaluatorName = "Nərmin Vəliyeva";
+      e.history.push({ at:"2026-11-08T11:00:00.000Z", byName:"Nərmin Vəliyeva", role:"manager", action:"submitted", note:"24/45" }); }
     db.employees["demo-" + e.employeeCode] = { ...e, createdBy:"demo-admin", updatedBy:"demo-admin", createdAt:new DTS(now - 86400000 * (10 - i)), updatedAt:new DTS(now - 3600000 * (10 - i)) };
   });
   return db;
@@ -2440,7 +2440,8 @@ async function scrHome() {
   if (isMgr()) tiles.push({ ic:"⏳", title:t("homeInProgress"), n:count("submitted") + count("under_evaluation") + count("director_approval"), href:"#/positions" });
   tiles.push({ ic:"✓", title:t("homeApproved"), n:count("approved"), href:"#/positions?status=approved" });
   const steps = [["1", t("step1"), t("step1d")], ["2", t("step2"), t("step2d")], ["3", t("step3"), t("step3d")], ["4", t("step4"), t("step4d")]];
-  return `<div class="page-head"><div><h1>${t("hello")}, ${esc((S.profile?.displayName || "").split(" ")[0])}</h1>
+  const myName = (S.profile?.displayName || "").trim();
+  return `<div class="page-head"><div><h1>${t("hello")}${myName ? ", " + esc(myName) : ""}!</h1>
     <p class="sub">${esc(L(ROLES[role()]))}${isMgr() ? " · " + esc(deptName(myDept())) : ""}</p></div></div>
   ${isMgr() && !myDept() ? `<div class="banner warn"><b>${t("tNoDept")}</b></div>` : ""}
   <h2 class="home-h">${t("homeTodo")}</h2>
@@ -2777,7 +2778,7 @@ async function scrLibrary() {
 function libTitleRows(d, titles) {
   return titles.map(x => { const l = levelFor(x, d.code), jd = S.jdt?.[jdId(d.code, x)];
     return `<tr><td><b>${esc(x)}</b>${S.libQ ? `<div class="small muted">${esc(L(d))}</div>` : ""}</td><td><span class="chip navy" title="${esc(L(LEVELS[l]))}">${l}</span></td><td>${rangeText(l)}</td>
-      <td class="small">${levelBandText(l)}</td><td>${jd?.fixedItems?.length ? `<span title="${esc(t("stdTitle"))}">🔒 v${jd.version || 1}</span>` : `<span class="muted small">—</span>`}</td>
+      <td class="small">${isMgr() && d.code !== myDept() ? `<span class="muted" title="${esc(t("salaryOtherDept"))}">🔒</span>` : levelBandText(l)}</td><td>${jd?.fixedItems?.length ? `<span title="${esc(t("stdTitle"))}">🔒 v${jd.version || 1}</span>` : `<span class="muted small">—</span>`}</td>
       <td><a class="btn btn-ghost btn-sm" href="#/library/jd/${encodeURIComponent(d.code)}/${encodeURIComponent(x)}">📄 ${t("jdOpen")}</a></td></tr>`; }).join("");
 }
 function renderLib() {
