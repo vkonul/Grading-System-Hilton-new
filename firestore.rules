@@ -61,10 +61,14 @@ service cloud.firestore {
       allow write: if isStaffHR();
     }
 
-    // Settings such as salary ranges: everyone signed in reads, only Admin writes
+    // Full salary table (settings/salaryBands): HR, HR Director and Admin read and change it
     match /settings/{id} {
-      allow read: if isActive();
-      allow write: if isAdmin();
+      allow read, write: if isStaffHR();
+    }
+    // Per-department copy of the salary table: a manager reads only their own department
+    match /salaryByDept/{dept} {
+      allow read: if isStaffHR() || (isManager() && me().departmentId == dept);
+      allow write: if isStaffHR();
     }
 
     // Job title library. Everyone signed in reads it; only Admin edits it.

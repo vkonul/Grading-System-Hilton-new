@@ -587,7 +587,8 @@ const STR = {
   salaryTitle:["Salary ranges","Maaş aralıqları"], salaryDesc:["Minimum, midpoint and maximum pay for each grade.","Hər dərəcə üçün minimum, orta və maksimum maaş."],
   salarySub:["Monthly gross pay range for every grade. Midpoint is calculated automatically.","Hər dərəcə üçün aylıq gross maaş aralığı. Orta nöqtə avtomatik hesablanır."],
   sMin:["Minimum","Minimum"], sMid:["Midpoint","Orta"], sMax:["Maximum","Maksimum"], sLevels:["Typical levels","Uyğun səviyyələr"], sCurrency:["Currency","Valyuta"],
-  salaryNote:["Only Admin can change the ranges. Everyone can see them.","Aralıqları yalnız Admin dəyişə bilər. Hamı görə bilər."], tBandInvalid:["Check the range of {g}: minimum must be lower than maximum","{g} aralığını yoxlayın: minimum maksimumdan az olmalıdır"],
+  salaryNote:["Admin and HR can change the ranges. HR sees all grades; each department manager sees only the grades of their department.","Aralıqları Admin və HR dəyişə bilər. HR bütün dərəcələri, departament meneceri isə yalnız öz departamentinə aid dərəcələri görür."],
+  salaryMgrNote:["Only the grades used in {d} are shown.","Yalnız “{d}” departamentinə aid dərəcələr göstərilir."], tBandInvalid:["Check the range of {g}: minimum must be lower than maximum","{g} aralığını yoxlayın: minimum maksimumdan az olmalıdır"],
   salaryCol:["Salary range","Maaş aralığı"], salaryZone:["Individual pay zone","Fərdi maaş zonası"],
   peopleTitle:["Employees","İşçilər"], peopleSub:["The employee list comes from one Excel file. Managers pick employees from it when grading.","İşçi siyahısı bir Excel faylından gəlir. Menecerlər qiymətləndirmədə bu siyahıdan seçir."],
   peopleImport:["Upload the employee Excel file","İşçi Excel faylını yüklə"], peopleStep1:["Download the template","Şablonu yükləyin"],
@@ -828,6 +829,7 @@ async function startDemo(resume = false) {
 async function switchDemoRole(uid) {
   DEMO.uid = uid; demoSave();
   S.user = demoUser(uid); S.profile = dclone(DEMO.db.users[uid]); S.employees = null; S.users = null; S.people = null; S.form = null; S.evalState = null; S.libEdit = null;
+  await loadSalaryBands();
   toast(`${t("demoRole")}: ${S.profile.displayName}`, "ok");
   location.hash = "#/home"; render();
 }
@@ -1338,7 +1340,7 @@ function scrPending() {
 
 function emptyState(msg) {
   return `<div class="empty"><p><b>${esc(msg || t("noPositions"))}</b></p><div class="row">
-    <a class="btn btn-primary" href="#/positions/new">${t("newPosition")}</a>
+    ${isMgr() || isAdmin() ? `<a class="btn btn-primary" href="#/grade">${t("gradeBtn")}</a>` : ""}
     ${isAdmin() && !msg ? `<button class="btn btn-secondary" data-act="sample">${t("loadSample")}</button>` : ""}</div></div>`;
 }
 
@@ -1368,7 +1370,7 @@ async function scrPositions({ params }) {
   await loadEmployees(true);
   return `
   <div class="page-head"><div><h1>${t("navPositions")}</h1><p class="sub" id="posCount"></p></div>
-    <div class="row"><a class="btn btn-primary" href="#/positions/new">${icon("plus")} ${t("newPosition")}</a>
+    <div class="row">${isMgr() || isAdmin() ? `<a class="btn btn-primary" href="#/grade">${t("gradeBtn")}</a>` : ""}
     <button class="btn btn-secondary" data-act="exportA-list">${icon("export")} ${t("exportExcel")}</button></div></div>
   <div class="card" style="padding:16px;margin-bottom:16px">
   <div class="toolbar" style="margin:0">
@@ -1784,7 +1786,7 @@ async function scrDetail({ id, seq }) {
   ${personalFitHTML(e)}
   <div class="row no-print" style="margin-bottom:16px" id="detailActions">
     ${edit ? `<a class="btn btn-primary" href="#/positions/${esc(e.id)}/edit">${t("edit")}</a>` : ""}
-    ${canHREvaluate() && !isSelf(e) && e.status !== "draft" ? `<a class="btn btn-secondary" href="#/positions/${esc(e.id)}/evaluate">${t("evaluate")}</a>` : ""}
+    ${canHREvaluate() && !isSelf(e) && ["submitted", "under_evaluation", "director_approval"].includes(e.status) && scoreTotal(e.managerEvaluation?.scores).complete ? `<a class="btn btn-secondary" href="#/positions/${esc(e.id)}/evaluate">🔍 ${t("hrReview")}</a>` : ""}
     <button class="btn btn-ghost" data-act="exportC-pv" data-id="${esc(e.id)}">${t("previewBtn")}</button>
     <button class="btn btn-ghost" data-act="exportC" data-id="${esc(e.id)}">${icon("export")} ${t("exportPos")}</button>
     <a class="btn btn-ghost" href="#/positions/new?dup=${esc(e.id)}">${t("duplicate")}</a>
@@ -2049,8 +2051,8 @@ async function directorDecide(id, decision) {
 // The "Trigger Email from Firestore" extension (SMTP: smtp.office365.com) sends each queued document.
 const MAIL_TEMPLATES = {
   evaluation_request:{ subject:"Qiymətləndirmə gözləyir: {{positionTitle}} ({{positionId}})",
-    lead:"{{actorName}} vəzifə profilini və menecer qiymətləndirməsini HR-a göndərdi. Zəhmət olmasa, müstəqil qiymətləndirmənizi aparın.",
-    leadEn:"A position profile and the manager's scores were sent to HR. Please complete your independent evaluation." },
+    lead:"{{actorName}} işçini qiymətləndirib HR-a göndərdi. Zəhmət olmasa, HR yoxlamasını aparın.",
+    leadEn:"A manager graded an employee and sent it to HR. Please complete the HR review." },
   evaluation_returned:{ subject:"Düzəliş tələb olunur: {{positionTitle}} ({{positionId}})",
     lead:"HR vəzifə profilini düzəliş üçün qaytardı. Şərh: {{comment}}", leadEn:"HR returned the position profile for changes. Comment: {{comment}}" },
   approval_request:{ subject:"Yekun təsdiq gözləyir: {{positionTitle}} — {{grade}}",
@@ -2218,6 +2220,7 @@ async function saveLibrary() {
     $$(".actionbar .btn").forEach(b => b.disabled = true);
     await batch.commit();
     S.libDocIds = codes; applyLibrary(list); S.libEdit = null;
+    try { const full = await getDoc(doc(db, "settings", "salaryBands")); await syncDeptBands(full.exists() ? full.data() : defaultBands()); } catch (e) { console.warn(e); }
     toast(t("tLibSaved"), "ok"); render();
   } catch (e) { toast(errMsg(e), "err"); $$(".actionbar .btn").forEach(b => b.disabled = false); }
 }
@@ -2231,9 +2234,27 @@ afterHooks.set(scrLibrary, renderLib);
 // ---------- Salary bands (settings/salaryBands) — everyone sees, only Admin edits ----------
 const DEFAULT_BANDS = { G1:[500,800], G2:[650,1000], G3:[800,1300], G4:[1000,1700], G5:[1300,2200], G6:[1700,2900], G7:[2200,3800], G8:[2900,5000], G9:[3800,6500], G10:[5000,9000] };
 const defaultBands = () => ({ currency:"AZN", bands:Object.fromEntries(GRADES.map(g => [g, { min:DEFAULT_BANDS[g][0], max:DEFAULT_BANDS[g][1] }])) });
+// Grades that belong to a department: the grade ranges of its job titles + grades already used there
+function deptGrades(code, employees) {
+  const set = new Set(), d = DEPT[code];
+  (d?.titles || []).forEach(x => { const r = LEVELS[levelFor(x, code)]?.range; if (r) GRADES.slice(gradeIdx(r[0]), gradeIdx(r[1]) + 1).forEach(g => set.add(g)); });
+  (employees || []).filter(e => e.departmentId === code).forEach(e => [e.evaluation?.finalGrade, e.position?.currentGrade].forEach(g => g && set.add(g.replace("+", ""))));
+  return GRADES.filter(g => set.has(g));
+}
+const deptBands = (B, code, employees) => ({ currency:B.currency || "AZN", dept:code, bands:Object.fromEntries(deptGrades(code, employees).filter(g => B.bands?.[g]).map(g => [g, B.bands[g]])) });
+// HR, HR Director and Admin read the full table; a manager reads only salaryByDept/{own department}
 async function loadSalaryBands() {
-  try { const s = await getDoc(doc(db, "settings", "salaryBands")); S.bands = s.exists() ? s.data() : defaultBands(); }
-  catch (e) { console.warn("bands", e); S.bands = defaultBands(); }
+  try {
+    if (isHR()) { const s = await getDoc(doc(db, "settings", "salaryBands")); S.bands = s.exists() ? s.data() : defaultBands(); }
+    else if (isMgr() && myDept()) { const s = await getDoc(doc(db, "salaryByDept", myDept())); S.bands = s.exists() ? s.data() : deptBands(defaultBands(), myDept()); }
+    else S.bands = { currency:"AZN", bands:{} };
+  } catch (e) { console.warn("bands", e); S.bands = { currency:"AZN", bands:{} }; }
+}
+// Re-derive the per-department copies from the full table (after saving ranges or the library)
+async function syncDeptBands(full) {
+  const list = await loadEmployees(true), b = writeBatch(db);
+  DEPARTMENTS.forEach(d => b.set(doc(db, "salaryByDept", d.code), { ...deptBands(full, d.code, list), updatedAt:serverTimestamp() }));
+  await b.commit();
 }
 const fmtMoney = n => n == null || n === "" || isNaN(n) ? "—" : Number(n).toLocaleString("en-US").replace(/,/g, " ");
 function band(g) {
@@ -2253,12 +2274,13 @@ function levelBandText(lvl) { const r = LEVELS[lvl]?.range; if (!r) return "—"
 
 async function scrSalary() {
   await loadSalaryBands();
-  const ed = isAdmin(), B = S.bands;
+  const ed = isHR(), B = S.bands, grades = GRADES.filter(g => B.bands?.[g]);
   return `<div class="no-print" style="margin-bottom:12px"><a href="#/reports" class="small">← ${t("navReports")}</a></div>
-  <div class="page-head"><div><h1>${t("salaryTitle")}</h1><p class="sub">${t("salarySub")}</p></div>
+  <div class="page-head"><div><h1>${t("salaryTitle")}</h1><p class="sub">${t("salarySub")}</p>${isMgr() ? `<p class="small muted">🔒 ${esc(t("salaryMgrNote", { d:deptName(myDept()) }))}</p>` : ""}</div>
     <div class="row"><button class="btn btn-ghost" data-act="exportSalary">${icon("export")} ${t("exportXlsx")}</button></div></div>
   <section class="card"><div class="table-wrap-always"><table class="tbl cmp salary-tbl"><thead><tr><th>${t("grade")}</th><th>${t("sMin")}</th><th>${t("sMid")}</th><th>${t("sMax")}</th><th>${t("sLevels")}</th></tr></thead><tbody>
-    ${GRADES.map(g => { const b = band(g); const lv = Object.entries(LEVELS).filter(([, v]) => gradeIdx(g) >= gradeIdx(v.range[0]) && gradeIdx(g) <= gradeIdx(v.range[1])).map(([k]) => k).join(", ");
+    ${grades.length ? "" : `<tr><td colspan="5" class="muted">${t("noResults")}</td></tr>`}
+    ${grades.map(g => { const b = band(g); const lv = Object.entries(LEVELS).filter(([, v]) => gradeIdx(g) >= gradeIdx(v.range[0]) && gradeIdx(g) <= gradeIdx(v.range[1])).map(([k]) => k).join(", ");
       return `<tr><td>${pill(g)}</td>
       <td>${ed ? `<input type="number" min="0" step="50" class="money" data-band="${g}.min" value="${b.min}" aria-label="${g} ${t("sMin")}">` : fmtMoney(b.min)}</td>
       <td class="muted" id="mid-${g}">${fmtMoney(b.mid)}</td>
@@ -2278,13 +2300,13 @@ async function saveBands() {
   }
   try {
     const data = { currency:($("#bandCur").value || "AZN").trim(), bands, updatedAt:serverTimestamp(), updatedByName:S.profile?.displayName || S.user.email || "" };
-    await setDoc(doc(db, "settings", "salaryBands"), data); S.bands = data; toast(t("tSaved"), "ok"); render();
+    await setDoc(doc(db, "settings", "salaryBands"), data); await syncDeptBands(data); S.bands = data; toast(t("tSaved"), "ok"); render();
   } catch (e) { toast(errMsg(e), "err"); }
 }
 function exportSalary(preview) {
   if (!xlsxReady()) return;
   const hs = [t("grade"), t("sMin"), t("sMid"), t("sMax"), t("sCurrency")];
-  const rows = GRADES.map(g => { const b = band(g); return { [hs[0]]:g, [hs[1]]:b.min, [hs[2]]:b.mid, [hs[3]]:b.max, [hs[4]]:cur() }; });
+  const rows = GRADES.filter(g => band(g)).map(g => { const b = band(g); return { [hs[0]]:g, [hs[1]]:b.min, [hs[2]]:b.mid, [hs[3]]:b.max, [hs[4]]:cur() }; });
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, makeSheet(rows, hs), t("salaryTitle").slice(0, 30));
   finishExport(wb, `salary-bands-${stamp()}.xlsx`, preview);
 }
@@ -2428,7 +2450,7 @@ async function scrHome() {
   ${isAdmin() ? `<h2 class="home-h">${t("homeAdmin")}</h2><div class="home-links">
       <a class="btn btn-ghost" href="#/admin/people">👥 ${t("peopleTitle")}</a><a class="btn btn-ghost" href="#/salary">💰 ${t("salaryTitle")}</a>
       <a class="btn btn-ghost" href="#/admin/users">🔑 ${t("usersTitle")}</a>${!list.length ? `<button class="btn btn-ghost" data-act="sample">${t("loadSample")}</button>` : ""}</div>`
-    : role() === "hr" || role() === "hr_director" ? `<div class="home-links"><a class="btn btn-ghost" href="#/admin/people">👥 ${t("peopleTitle")}</a></div>` : ""}
+    : role() === "hr" || role() === "hr_director" ? `<div class="home-links"><a class="btn btn-ghost" href="#/admin/people">👥 ${t("peopleTitle")}</a><a class="btn btn-ghost" href="#/salary">💰 ${t("salaryTitle")}</a></div>` : ""}
   <h2 class="home-h">${t("howItWorks")}</h2>
   <ol class="how">${steps.map(([n, a, b]) => `<li><span class="how-n">${n}</span><div><b>${a}</b><span>${b}</span></div></li>`).join("")}</ol>`;
 }
@@ -2918,7 +2940,7 @@ function exportA(filters, preview) {
     level:fl(SECTIONS[0].fields[4]), cur:fl(SECTIONS[0].fields[3]), total:H("Total Score","Ümumi bal"), rec:H("Recommended Grade","Tövsiyə olunan dərəcə"),
     fin:H("Final Grade","Yekun dərəcə"), st:t("status"), date:H("Evaluation Date","Qiymətləndirmə tarixi"), ev:H("Evaluator","Qiymətləndirici") };
   const fh = FACTORS.map(f => L(f));
-  const headers = [c.code, c.name, c.pid, c.title, c.dept, c.level, c.cur, ...fh, H("Manager Total","Menecer cəmi"), c.total, H("Gap (HR − Manager)","Fərq (HR − Menecer)"), H("Calibration flag","Kalibrasiya"), c.rec, c.fin, t("salaryCol"), t("fitTitle"), t("personalGrade"), t("salaryZone"), c.st, c.date, c.ev];
+  const headers = [c.code, c.name, c.pid, c.title, c.dept, c.level, c.cur, ...fh, H("Manager Total","Menecer cəmi"), c.total, H("Gap (HR − Manager)","Fərq (HR − Menecer)"), H("HR adjusted","HR düzəlişi"), c.rec, c.fin, t("salaryCol"), t("fitTitle"), t("personalGrade"), t("salaryZone"), c.st, c.date, c.ev];
   const rows = list.map(e => {
     const ev = e.evaluation || {}, p = e.position || {};
     const r = { [c.code]:e.employeeCode || "", [c.name]:e.fullName || "", [c.pid]:p.positionId || "", [c.title]:p.jobTitle || "", [c.dept]:deptName(e.departmentId),
@@ -2928,7 +2950,7 @@ function exportA(filters, preview) {
     const ms = e.managerEvaluation?.scores, cal = calibration(ms, ev.scores);
     r[H("Manager Total","Menecer cəmi")] = ms && scoreTotal(ms).complete ? scoreTotal(ms).total : "";
     r[H("Gap (HR − Manager)","Fərq (HR − Menecer)")] = cal ? cal.totalGap : "";
-    r[H("Calibration flag","Kalibrasiya")] = cal ? (cal.flagged ? H("Yes","Bəli") : H("No","Xeyr")) : "";
+    r[H("HR adjusted","HR düzəlişi")] = ev.scores ? (Object.keys(ev.adjustments || {}).length ? H("Yes","Bəli") : H("No","Xeyr")) : "";
     const pf = personalFit(e); r[t("fitTitle")] = pf.state === "unknown" ? "" : t("fit_" + pf.state); r[t("personalGrade")] = personalGradeOf(e) || "";
     r[t("salaryCol")] = ev.finalGrade ? bandText(ev.finalGrade) : ""; r[t("salaryZone")] = e.status === "approved" ? personalZone(e) : "";
     Object.assign(r, { [c.total]:ev.scores ? (ev.totalScore ?? st.total) : "", [c.rec]:ev.recommendedGrade || "", [c.fin]:ev.finalGrade || "", [c.st]:statusLabel(e.status),
@@ -2967,11 +2989,12 @@ function evalRow(e) {
   const fa = e.finalApproval || {}, me = e.managerEvaluation || {}, cal = calibration(me.scores, ev.scores);
   FACTORS.forEach(f => o[`${t("mgrScore")}: ${L(f)}`] = me.scores?.[f.key] ?? "");
   o[t("mgrEvaluation")] = me.scores ? scoreTotal(me.scores).total : ""; o[`${t("mgrScore")} — ${t("evaluator")}`] = me.evaluatorName || "";
-  o[t("calibration")] = cal ? (cal.flagged ? t("yes") : t("no")) : ""; o[t("calNote")] = ev.calibrationNote || "";
+  o[t("hrAdjusted")] = Object.entries(ev.adjustments || {}).map(([k, v]) => `${L(FACTORS.find(f => f.key === k) || { en:k, az:k })}: ${v.from}→${v.to} (${v.reason || ""})`).join("; ");
+  o[t("flagsTitle", { n:"" }).replace(/^\s*/, "")] = (ev.flags || []).join("; ");
   o[t("finalDecision")] = fa.decision ? t("dec_" + fa.decision) : ""; o[t("finalApproval")] = fa.byName || ""; o[t("mgrDate")] = fa.date || ""; o[t("dirComment")] = fa.comment || "";
   return o;
 }
-const evalHeaders = () => [fl(SECTIONS[0].fields[5]), fl(TOP_FIELDS[0]), fl(TOP_FIELDS[1]), ...EVAL_FIELDS.map(fl), ...FACTORS.map(f => `${t("mgrScore")}: ${L(f)}`), t("mgrEvaluation"), `${t("mgrScore")} — ${t("evaluator")}`, t("calibration"), t("calNote"), t("finalDecision"), t("finalApproval"), t("mgrDate"), t("dirComment")];
+const evalHeaders = () => [fl(SECTIONS[0].fields[5]), fl(TOP_FIELDS[0]), fl(TOP_FIELDS[1]), ...EVAL_FIELDS.map(fl), ...FACTORS.map(f => `${t("mgrScore")}: ${L(f)}`), t("mgrEvaluation"), `${t("mgrScore")} — ${t("evaluator")}`, t("hrAdjusted"), t("flagsTitle", { n:"" }).replace(/^\s*/, ""), t("finalDecision"), t("finalApproval"), t("mgrDate"), t("dirComment")];
 function exportB(filters, preview) {
   if (!xlsxReady()) return;
   const list = sortByUpdated(filterList(scopeList(S.employees || []), filters));
